@@ -1,0 +1,73 @@
+package models
+
+import "time"
+
+// Job represents a scraped job listing
+type Job struct {
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Company     string    `json:"company"`
+	Location    string    `json:"location"`
+	Country     string    `json:"country"`
+	URL         string    `json:"url"`
+	Description string    `json:"description"`
+	Salary      string    `json:"salary,omitempty"`
+	Source      string    `json:"source"` // adzuna, indeed, rss, etc.
+	MatchScore  float64   `json:"match_score"`
+	ScrapedAt   time.Time `json:"scraped_at"`
+	Seen        bool      `json:"seen"`
+}
+
+// Profile represents the parsed CV profile
+type Profile struct {
+	FullName            string       `json:"full_name"`
+	CurrentTitle        string       `json:"current_title"`
+	SeniorityLevel      string       `json:"seniority_level"`
+	YearsOfExperience   int          `json:"years_of_experience"`
+	TechnicalSkills     []string     `json:"technical_skills"`
+	ProgrammingLangs    []string     `json:"programming_languages"`
+	FrameworksAndTools  []string     `json:"frameworks_and_tools"`
+	Domains             []string     `json:"domains"`
+	TopKeywords         []string     `json:"top_keywords"`
+	TargetRoles         []string     `json:"target_roles"`
+	Languages           []Language   `json:"languages"`
+}
+
+type Language struct {
+	Language    string `json:"language"`
+	Proficiency string `json:"proficiency"`
+}
+
+// CoverLetterRequest is the input for cover letter generation
+type CoverLetterRequest struct {
+	JobID   string `json:"job_id" binding:"required"`
+	JobURL  string `json:"job_url"`
+	JobDesc string `json:"job_description"`
+}
+
+// CoverLetterResponse is the output from cover letter generation
+type CoverLetterResponse struct {
+	JobTitle     string `json:"job_title"`
+	Company      string `json:"company"`
+	CoverLetter  string `json:"cover_letter"`
+	TailoredCV   string `json:"tailored_cv_bullets"`
+	MatchScore   float64 `json:"match_score"`
+	MissingSkills []string `json:"missing_skills"`
+}
+
+// PipelineStatus tracks the current run
+type PipelineStatus struct {
+	Status      string    `json:"status"` // idle, running, done, error
+	LastRun     time.Time `json:"last_run"`
+	JobsFound   int       `json:"jobs_found"`
+	JobsMatched int       `json:"jobs_matched"`
+	Message     string    `json:"message"`
+}
+
+// APIResponse is a generic response wrapper
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   string      `json:"error,omitempty"`
+	Message string      `json:"message,omitempty"`
+}

@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/profile.json
+data/*.json
+*.pdf
+.DS_Store
