@@ -3,9 +3,8 @@ FROM golang:1.22-bookworm AS go-builder
 WORKDIR /app/api
 
 COPY api/go.mod ./
-RUN go mod download
-
 COPY api ./
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./cmd/server
 
 
