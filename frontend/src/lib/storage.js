@@ -23,7 +23,7 @@ function writeJSON(key, value) {
   window.localStorage.setItem(key, JSON.stringify(value))
 }
 
-function profileSignature(profile) {
+export function profileSignature(profile) {
   return JSON.stringify({
     full_name: profile?.full_name || '',
     current_title: profile?.current_title || '',

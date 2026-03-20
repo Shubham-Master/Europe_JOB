@@ -74,6 +74,11 @@ type GuideChatRequest struct {
 	HasProfile       bool   `json:"has_profile,omitempty"`
 }
 
+type ActivateCVRequest struct {
+	Filename string                 `json:"filename"`
+	Profile  map[string]interface{} `json:"profile" binding:"required"`
+}
+
 // PipelineStatus tracks the current run
 type PipelineStatus struct {
 	Status      string    `json:"status"` // idle, running, done, error

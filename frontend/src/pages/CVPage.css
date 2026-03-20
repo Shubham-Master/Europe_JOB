@@ -130,14 +130,23 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
-  text-align: left;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .history-item:hover {
   border-color: var(--border2);
+}
+
+.history-preview {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .history-name {
@@ -148,6 +157,38 @@
 .history-meta {
   color: var(--text3);
   font-size: 12.5px;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.history-activate,
+.history-badge {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.history-activate {
+  border: 1px solid var(--border2);
+  color: var(--accent);
+  background: rgba(232, 255, 71, 0.06);
+}
+
+.history-activate:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.history-badge {
+  border: 1px solid rgba(71, 255, 138, 0.2);
+  color: var(--green);
+  background: rgba(71, 255, 138, 0.08);
 }
 
 .history-tip {

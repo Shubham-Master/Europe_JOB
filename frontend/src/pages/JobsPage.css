@@ -87,6 +87,23 @@
   backdrop-filter: blur(14px);
 }
 
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)), var(--bg2);
+  color: var(--text2);
+  font-size: 12.5px;
+  backdrop-filter: blur(14px);
+}
+
+.filter-toggle input {
+  accent-color: var(--accent);
+}
+
 .score-filter {
   display: flex;
   align-items: center;

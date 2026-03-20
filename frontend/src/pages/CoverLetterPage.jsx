@@ -131,6 +131,21 @@ function openPrintableDocument({ title, subtitle, content }) {
   return true
 }
 
+function normalizeCoverLetterError(err) {
+  const raw = err?.response?.data?.error || ''
+  const lower = raw.toLowerCase()
+
+  if (
+    lower.includes('quota exceeded') ||
+    lower.includes('rate limit') ||
+    lower.includes('you exceeded your current quota')
+  ) {
+    return 'Gemini free-tier limit reached for now. New AI generation is temporarily unavailable. Use a saved cover letter below or try again later.'
+  }
+
+  return raw || 'Could not generate the cover letter. Please upload your CV and check the API key.'
+}
+
 export default function CoverLetterPage({ job }) {
   const [result, setResult]             = useState(null)
   const [history, setHistory]           = useState(() => getCoverLetterHistory())
@@ -194,7 +209,7 @@ export default function CoverLetterPage({ job }) {
       setHistory(saveCoverLetterResult(next))
       setActiveTab('letter')
     } catch (err) {
-      setError(err.response?.data?.error || 'Could not generate the cover letter. Please upload your CV and check the API key.')
+      setError(normalizeCoverLetterError(err))
     }
     setLoading(false)
   }

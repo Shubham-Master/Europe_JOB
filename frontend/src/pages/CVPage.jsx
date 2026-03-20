@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import api from '../lib/api'
-import { getCVHistory, saveCVSnapshot } from '../lib/storage'
+import { getCVHistory, profileSignature, saveCVSnapshot } from '../lib/storage'
 import './CVPage.css'
 
 export default function CVPage() {
@@ -11,6 +11,8 @@ export default function CVPage() {
   const [uploaded, setUploaded] = useState(false)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [error, setError]       = useState('')
+  const [activatingSignature, setActivatingSignature] = useState('')
+  const [activeSignature, setActiveSignature] = useState('')
   const fileRef = useRef()
 
   const fetchProfile = async () => {
@@ -25,6 +27,7 @@ export default function CVPage() {
 
     setProfile(res.data.data)
     setUploaded(true)
+    setActiveSignature(profileSignature(res.data.data))
     setHistory(saveCVSnapshot(res.data.data))
     return res.data.data
   }
@@ -44,7 +47,7 @@ export default function CVPage() {
   }, [])
 
   const handleFile = async (file) => {
-    if (!file || !file.name.endsWith('.pdf')) {
+    if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
       alert('Please upload a PDF file')
       return
     }
@@ -55,19 +58,50 @@ export default function CVPage() {
     form.append('cv', file)
 
     try {
-      await api.post('/api/v1/cv/parse', form, {
+      const res = await api.post('/api/v1/cv/parse', form, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
+
       setUploaded(true)
-      const profileData = await fetchProfile()
+
+      const profileData = res.data?.data?.profile
       if (profileData) {
+        setProfile(profileData)
+        setActiveSignature(profileSignature(profileData))
         setHistory(saveCVSnapshot(profileData, file.name))
+      } else {
+        await fetchProfile()
       }
     } catch (err) {
       setUploaded(false)
       setError(err.response?.data?.error || 'Could not parse the CV. Check your Gemini API key and try again.')
     }
     setUploading(false)
+  }
+
+  const activateHistoryItem = async (item) => {
+    if (!item?.profile) return
+
+    const nextSignature = profileSignature(item.profile)
+    setActivatingSignature(nextSignature)
+    setError('')
+
+    try {
+      const res = await api.post('/api/v1/cv/activate', {
+        filename: item.filename || '',
+        profile: item.profile,
+      })
+
+      const activeProfile = res.data?.data || item.profile
+      setProfile(activeProfile)
+      setUploaded(true)
+      setActiveSignature(profileSignature(activeProfile))
+      setHistory(saveCVSnapshot(activeProfile, item.filename || ''))
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not activate this CV. Please try again.')
+    }
+
+    setActivatingSignature('')
   }
 
   const onDrop = (e) => {
@@ -154,18 +188,37 @@ export default function CVPage() {
             </div>
           </div>
           <div className="history-list">
-            {history.map(item => (
-              <button
+            {history.map(item => {
+              const itemSignature = item._signature || profileSignature(item.profile)
+              return (
+              <div
                 key={item.id}
                 className="history-item"
-                onClick={() => setProfile(item.profile)}
               >
-                <span className="history-name">{item.filename || item.profile?.full_name || 'CV snapshot'}</span>
-                <span className="history-meta">
-                  {item.profile?.current_title || 'Untitled profile'} · {new Date(item.saved_at).toLocaleString()}
-                </span>
-              </button>
-            ))}
+                <button
+                  className="history-preview"
+                  onClick={() => setProfile(item.profile)}
+                >
+                  <span className="history-name">{item.filename || item.profile?.full_name || 'CV snapshot'}</span>
+                  <span className="history-meta">
+                    {item.profile?.current_title || 'Untitled profile'} · {new Date(item.saved_at).toLocaleString()}
+                  </span>
+                </button>
+                <div className="history-actions">
+                  {activeSignature === itemSignature ? (
+                    <span className="history-badge">Active CV</span>
+                  ) : (
+                    <button
+                      className="history-activate"
+                      onClick={() => activateHistoryItem(item)}
+                      disabled={activatingSignature === itemSignature}
+                    >
+                      {activatingSignature === itemSignature ? 'Activating...' : 'Use this CV'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )})}
           </div>
           <div className="history-tip">
             Need to adapt your CV for a specific role? Select a job and use the tailored bullets in the Cover Letter tab.

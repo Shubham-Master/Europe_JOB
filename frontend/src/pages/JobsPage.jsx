@@ -15,6 +15,8 @@ function isLikelyGeoLocked(job) {
 export default function JobsPage({ onJobSelect, onSceneChange }) {
   const [jobs, setJobs]       = useState([])
   const [country, setCountry] = useState('All')
+  const [source, setSource]   = useState('All')
+  const [hideGeoLocked, setHideGeoLocked] = useState(false)
   const [minScore, setMinScore] = useState(0)
   const [sortBy, setSortBy]   = useState('score')
   const [loading, setLoading] = useState(true)
@@ -73,9 +75,12 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
   }
 
   const countries = ['All', ...new Set(jobs.map(job => job.country).filter(Boolean))]
+  const sources = ['All', ...new Set(jobs.map(job => job.source).filter(Boolean))]
 
   const filtered = jobs.filter(job => {
     if (country !== 'All' && job.country !== country) return false
+    if (source !== 'All' && job.source !== source) return false
+    if (hideGeoLocked && isLikelyGeoLocked(job)) return false
     if (job.match_score < minScore) return false
     if (search &&
         !job.title.toLowerCase().includes(search.toLowerCase()) &&
@@ -122,10 +127,21 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
         <select className="filter-select" value={country} onChange={e => setCountry(e.target.value)}>
           {countries.map(item => <option key={item}>{item}</option>)}
         </select>
+        <select className="filter-select" value={source} onChange={e => setSource(e.target.value)}>
+          {sources.map(item => <option key={item}>{item}</option>)}
+        </select>
         <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
           <option value="score">Best Match</option>
           <option value="latest">Latest Posted</option>
         </select>
+        <label className="filter-toggle">
+          <input
+            type="checkbox"
+            checked={hideGeoLocked}
+            onChange={e => setHideGeoLocked(e.target.checked)}
+          />
+          <span>Hide geo-restricted</span>
+        </label>
         <div className="score-filter">
           <span className="filter-label">Min Score</span>
           <input
@@ -185,7 +201,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
               </button>
               {isLikelyGeoLocked(job) && (
                 <button className="btn-ghost" onClick={() => searchCompanyCareers(job)}>
-                  Search Company Careers
+                  Find via Google
                 </button>
               )}
               <button className="btn-primary" onClick={() => selectJob(job)}>

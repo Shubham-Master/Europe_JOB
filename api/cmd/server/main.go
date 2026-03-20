@@ -48,8 +48,9 @@ func main() {
 		// CV
 		cv := v1.Group("/cv")
 		{
-			cv.POST("/parse", h.ParseCV)     // POST /api/v1/cv/parse (multipart)
-			cv.GET("/profile", h.GetProfile) // GET  /api/v1/cv/profile
+			cv.POST("/parse", h.ParseCV)         // POST /api/v1/cv/parse (multipart)
+			cv.POST("/activate", h.ActivateProfile) // POST /api/v1/cv/activate
+			cv.GET("/profile", h.GetProfile)     // GET  /api/v1/cv/profile
 		}
 
 		// Cover Letter

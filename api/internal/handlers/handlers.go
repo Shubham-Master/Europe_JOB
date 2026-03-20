@@ -303,6 +303,42 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: data})
 }
 
+// ActivateProfile makes a selected parsed CV snapshot the active profile.
+func (h *Handler) ActivateProfile(c *gin.Context) {
+	userID := currentUserID(c)
+	var req models.ActivateCVRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: err.Error()})
+		return
+	}
+
+	if len(req.Profile) == 0 {
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: "profile payload is required"})
+		return
+	}
+
+	profilePath := resolvedPath(profileJSONPath)
+	if err := writeJSONMap(profilePath, req.Profile); err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "Could not activate this CV profile locally.",
+		})
+		return
+	}
+
+	if h.store != nil && h.store.Enabled() {
+		if _, err := h.store.SaveCVVersion(userID, req.Profile, req.Filename); err != nil {
+			log.Printf("⚠️  Supabase CV activation save failed, local profile still updated: %v", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "CV activated successfully",
+		Data:    req.Profile,
+	})
+}
+
 // ─── Cover Letter ─────────────────────────────────────────────────────────────
 
 // GenerateCoverLetter calls Python to generate a tailored cover letter
@@ -899,6 +935,11 @@ func writeTempJSON(payload interface{}) (string, error) {
 }
 
 func (h *Handler) loadProfileData(userID string) (map[string]interface{}, error) {
+	diskProfilePath := resolvedPath(profileJSONPath)
+	if _, err := os.Stat(diskProfilePath); err == nil {
+		return readJSONFile(diskProfilePath)
+	}
+
 	if h.store != nil && h.store.Enabled() {
 		cvVersion, err := h.store.GetActiveCVVersion(userID)
 		if err != nil {
@@ -908,10 +949,15 @@ func (h *Handler) loadProfileData(userID string) (map[string]interface{}, error)
 		}
 	}
 
-	return readJSONFile(resolvedPath(profileJSONPath))
+	return readJSONFile(diskProfilePath)
 }
 
 func (h *Handler) ensureLocalProfileFile(userID string) (string, func(), error) {
+	diskProfilePath := resolvedPath(profileJSONPath)
+	if _, err := os.Stat(diskProfilePath); err == nil {
+		return diskProfilePath, func() {}, nil
+	}
+
 	if h.store != nil && h.store.Enabled() {
 		path, err := createProfileFileForUser(userID, h.store)
 		if err == nil {
@@ -920,7 +966,6 @@ func (h *Handler) ensureLocalProfileFile(userID string) (string, func(), error) 
 		log.Printf("⚠️  Supabase profile restore failed, falling back to disk: %v", err)
 	}
 
-	diskProfilePath := resolvedPath(profileJSONPath)
 	if _, err := os.Stat(diskProfilePath); err != nil {
 		return "", nil, err
 	}
@@ -1083,6 +1128,11 @@ func createProfileFileForUser(userID string, supabaseStore *store.SupabaseStore)
 }
 
 func createProfileFileForPipeline(userID string, supabaseStore *store.SupabaseStore) (string, func(), error) {
+	diskProfilePath := resolvedPath(profileJSONPath)
+	if _, err := os.Stat(diskProfilePath); err == nil {
+		return diskProfilePath, func() {}, nil
+	}
+
 	if supabaseStore != nil && supabaseStore.Enabled() {
 		path, err := createProfileFileForUser(userID, supabaseStore)
 		if err == nil {
@@ -1091,7 +1141,6 @@ func createProfileFileForPipeline(userID string, supabaseStore *store.SupabaseSt
 		log.Printf("⚠️  Supabase pipeline profile restore failed, falling back to disk: %v", err)
 	}
 
-	diskProfilePath := resolvedPath(profileJSONPath)
 	if _, err := os.Stat(diskProfilePath); err != nil {
 		return "", nil, err
 	}
