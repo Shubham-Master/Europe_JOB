@@ -12,6 +12,7 @@ export default function JobsPage({ onJobSelect }) {
   const [jobs, setJobs]       = useState([])
   const [country, setCountry] = useState('All')
   const [minScore, setMinScore] = useState(0)
+  const [sortBy, setSortBy]   = useState('score')
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
   const [error, setError]     = useState('')
@@ -65,6 +66,13 @@ export default function JobsPage({ onJobSelect }) {
         !job.title.toLowerCase().includes(search.toLowerCase()) &&
         !job.company.toLowerCase().includes(search.toLowerCase())) return false
     return true
+  }).sort((a, b) => {
+    if (sortBy === 'latest') {
+      const aTime = a.posted_at ? new Date(a.posted_at).getTime() : 0
+      const bTime = b.posted_at ? new Date(b.posted_at).getTime() : 0
+      return bTime - aTime
+    }
+    return (b.match_score || 0) - (a.match_score || 0)
   })
 
   const stats = {
@@ -98,6 +106,10 @@ export default function JobsPage({ onJobSelect }) {
         />
         <select className="filter-select" value={country} onChange={e => setCountry(e.target.value)}>
           {countries.map(item => <option key={item}>{item}</option>)}
+        </select>
+        <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <option value="score">Best Match</option>
+          <option value="latest">Latest Posted</option>
         </select>
         <div className="score-filter">
           <span className="filter-label">Min Score</span>
@@ -135,6 +147,12 @@ export default function JobsPage({ onJobSelect }) {
                     <span className="location">📍 {job.location}</span>
                     <span className="dot">·</span>
                     <span className="source">{job.source}</span>
+                    {job.posted_at && (
+                      <>
+                        <span className="dot">·</span>
+                        <span className="posted">🕒 {formatPostedTime(job.posted_at)}</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <ScoreBadge score={job.match_score} />
@@ -154,4 +172,18 @@ export default function JobsPage({ onJobSelect }) {
       </div>
     </div>
   )
+}
+
+function formatPostedTime(value) {
+  const postedAt = new Date(value)
+  if (Number.isNaN(postedAt.getTime())) return 'Date unavailable'
+
+  const diffHours = Math.max(0, Math.floor((Date.now() - postedAt.getTime()) / 3600000))
+  if (diffHours < 1) return 'Just now'
+  if (diffHours < 24) return `${diffHours}h ago`
+
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}d ago`
+
+  return postedAt.toLocaleDateString()
 }

@@ -112,6 +112,7 @@ def parse_adzuna_job(raw: dict, country_code: str) -> dict:
 
     return {
         "id": generate_job_id(url),
+        "source_job_id": str(raw.get("id", "")).strip(),
         "title": raw.get("title", "").strip(),
         "company": raw.get("company", {}).get("display_name", "Unknown"),
         "location": raw.get("location", {}).get("display_name", ""),
@@ -121,8 +122,11 @@ def parse_adzuna_job(raw: dict, country_code: str) -> dict:
         "description": raw.get("description", "").strip(),
         "salary": salary,
         "source": "adzuna",
+        "employment_type": raw.get("contract_time", "") or "",
+        "remote_type": "",
         "match_score": 0.0,  # Will be set by matcher
         "scraped_at": datetime.utcnow().isoformat(),
+        "posted_at": raw.get("created", "") or "",
         "seen": False,
     }
 

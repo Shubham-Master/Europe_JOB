@@ -9,6 +9,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -67,7 +68,7 @@ def fetch_indeed_rss(keyword: str, location: str = "Germany") -> list[dict]:
         print(f"  📡 Indeed RSS: '{keyword}' in {location}...")
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
-        return parse_rss_feed(response.text, location, source="indeed")
+        return parse_rss_feed(response.text, location, source="indeed_rss")
 
     except requests.exceptions.RequestException as e:
         print(f"  ❌ Indeed RSS failed for {location}: {e}")
@@ -90,6 +91,12 @@ def parse_rss_feed(xml_text: str, location: str, source: str) -> list[dict]:
             url = item.findtext("link", "").strip()
             description = item.findtext("description", "").strip()
             pub_date = item.findtext("pubDate", "").strip()
+            posted_at = ""
+            if pub_date:
+                try:
+                    posted_at = parsedate_to_datetime(pub_date).isoformat()
+                except (TypeError, ValueError, IndexError):
+                    posted_at = ""
 
             # Clean HTML from description
             description = clean_html(description)
@@ -106,6 +113,7 @@ def parse_rss_feed(xml_text: str, location: str, source: str) -> list[dict]:
 
             jobs.append({
                 "id": generate_job_id(url),
+                "source_job_id": generate_job_id(url),
                 "title": title,
                 "company": company,
                 "location": location,
@@ -115,8 +123,11 @@ def parse_rss_feed(xml_text: str, location: str, source: str) -> list[dict]:
                 "description": description[:500],  # Trim long descriptions
                 "salary": "",
                 "source": source,
+                "employment_type": "",
+                "remote_type": "",
                 "match_score": 0.0,
                 "scraped_at": datetime.utcnow().isoformat(),
+                "posted_at": posted_at,
                 "seen": False,
             })
 

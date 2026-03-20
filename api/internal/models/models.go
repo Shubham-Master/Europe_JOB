@@ -4,18 +4,25 @@ import "time"
 
 // Job represents a scraped job listing
 type Job struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Company     string    `json:"company"`
-	Location    string    `json:"location"`
-	Country     string    `json:"country"`
-	URL         string    `json:"url"`
-	Description string    `json:"description"`
-	Salary      string    `json:"salary,omitempty"`
-	Source      string    `json:"source"` // adzuna, indeed, rss, etc.
-	MatchScore  float64   `json:"match_score"`
-	ScrapedAt   string    `json:"scraped_at"`
-	Seen        bool      `json:"seen"`
+	ID             string             `json:"id"`
+	SourceJobID    string             `json:"source_job_id,omitempty"`
+	Title          string             `json:"title"`
+	Company        string             `json:"company"`
+	Location       string             `json:"location"`
+	Country        string             `json:"country"`
+	CountryCode    string             `json:"country_code,omitempty"`
+	URL            string             `json:"url"`
+	Description    string             `json:"description"`
+	Salary         string             `json:"salary,omitempty"`
+	Source         string             `json:"source"` // adzuna, indeed, rss, etc.
+	EmploymentType string             `json:"employment_type,omitempty"`
+	RemoteType     string             `json:"remote_type,omitempty"`
+	MatchScore     float64            `json:"match_score"`
+	ScoreBreakdown map[string]float64 `json:"score_breakdown,omitempty"`
+	ScrapedAt      string             `json:"scraped_at"`
+	PostedAt       string             `json:"posted_at,omitempty"`
+	ExpiresAt      string             `json:"expires_at,omitempty"`
+	Seen           bool               `json:"seen"`
 }
 
 // Profile represents the parsed CV profile

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/Shubham-Master/europe-job-api/config"
 	"github.com/Shubham-Master/europe-job-api/internal/models"
+	"github.com/Shubham-Master/europe-job-api/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
@@ -34,11 +36,15 @@ const (
 )
 
 type Handler struct {
-	cfg *config.Config
+	cfg   *config.Config
+	store *store.SupabaseStore
 }
 
 func New(cfg *config.Config) *Handler {
-	return &Handler{cfg: cfg}
+	return &Handler{
+		cfg:   cfg,
+		store: store.NewSupabaseStore(cfg.SupabaseURL, cfg.SupabaseKey),
+	}
 }
 
 // ─── Health ──────────────────────────────────────────────────────────────────
@@ -58,6 +64,26 @@ func (h *Handler) Health(c *gin.Context) {
 
 // GetJobs returns all scraped jobs, optionally filtered
 func (h *Handler) GetJobs(c *gin.Context) {
+	country := c.Query("country")
+	minScore := c.Query("min_score")
+
+	if h.store != nil && h.store.Enabled() {
+		jobs, err := h.store.GetJobs(country, minScore)
+		if err == nil {
+			jobMu.Lock()
+			jobStore = jobs
+			jobMu.Unlock()
+
+			c.JSON(http.StatusOK, models.APIResponse{
+				Success: true,
+				Data:    jobs,
+			})
+			return
+		}
+
+		log.Printf("⚠️  Supabase jobs fetch failed, falling back to disk: %v", err)
+	}
+
 	if err := loadJobsFromDisk(matchedJobsPath); err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
@@ -65,9 +91,6 @@ func (h *Handler) GetJobs(c *gin.Context) {
 		})
 		return
 	}
-
-	country := c.Query("country")
-	minScore := c.Query("min_score")
 
 	jobMu.RLock()
 	defer jobMu.RUnlock()
@@ -94,6 +117,19 @@ func (h *Handler) GetJobs(c *gin.Context) {
 
 // GetJob returns a single job by ID
 func (h *Handler) GetJob(c *gin.Context) {
+	id := c.Param("id")
+
+	if h.store != nil && h.store.Enabled() {
+		job, err := h.store.GetJobByExternalKey(id)
+		if err == nil && job != nil {
+			c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: job})
+			return
+		}
+		if err != nil {
+			log.Printf("⚠️  Supabase job lookup failed, falling back to disk: %v", err)
+		}
+	}
+
 	if err := loadJobsFromDisk(matchedJobsPath); err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
@@ -101,8 +137,6 @@ func (h *Handler) GetJob(c *gin.Context) {
 		})
 		return
 	}
-
-	id := c.Param("id")
 
 	jobMu.RLock()
 	defer jobMu.RUnlock()
@@ -119,6 +153,26 @@ func (h *Handler) GetJob(c *gin.Context) {
 
 // MarkJobSeen marks a job as seen
 func (h *Handler) MarkJobSeen(c *gin.Context) {
+	id := c.Param("id")
+
+	if h.store != nil && h.store.Enabled() {
+		if err := h.store.MarkJobSeen(id); err != nil {
+			log.Printf("⚠️  Supabase seen update failed, falling back to disk: %v", err)
+		} else {
+			jobMu.Lock()
+			for i, job := range jobStore {
+				if job.ID == id {
+					jobStore[i].Seen = true
+					break
+				}
+			}
+			jobMu.Unlock()
+
+			c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "marked as seen"})
+			return
+		}
+	}
+
 	if err := loadJobsFromDisk(matchedJobsPath); err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
@@ -126,8 +180,6 @@ func (h *Handler) MarkJobSeen(c *gin.Context) {
 		})
 		return
 	}
-
-	id := c.Param("id")
 
 	jobMu.Lock()
 	defer jobMu.Unlock()
@@ -193,16 +245,38 @@ func (h *Handler) ParseCV(c *gin.Context) {
 		return
 	}
 
+	profileData, err := readJSONFile(profileJSONPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "CV parsed but profile could not be loaded back",
+		})
+		return
+	}
+
+	if h.store != nil && h.store.Enabled() {
+		if _, err := h.store.SaveCVVersion(profileData, file.Filename); err != nil {
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "CV parsed but failed to save profile to Supabase: " + err.Error(),
+			})
+			return
+		}
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "CV parsed successfully",
-		Data:    gin.H{"output": out.String()},
+		Data: gin.H{
+			"output":  out.String(),
+			"profile": profileData,
+		},
 	})
 }
 
 // GetProfile returns the current parsed CV profile
 func (h *Handler) GetProfile(c *gin.Context) {
-	data, err := readJSONFile(profileJSONPath)
+	data, err := h.loadProfileData()
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
@@ -231,7 +305,7 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 		return
 	}
 
-	if _, err := os.Stat(profileJSONPath); err != nil {
+	if _, err := h.ensureLocalProfileFile(); err != nil {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
 			Error:   "No parsed CV profile found. Upload your CV first.",
@@ -303,6 +377,12 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 		return
 	}
 
+	if h.store != nil && h.store.Enabled() {
+		if err := h.store.SaveCoverLetter(job, data); err != nil {
+			log.Printf("⚠️  Cover letter saved locally but not persisted to Supabase: %v", err)
+		}
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "Cover letter generated successfully",
@@ -322,7 +402,7 @@ func (h *Handler) RunPipeline(c *gin.Context) {
 		return
 	}
 
-	if _, err := os.Stat(profileJSONPath); err != nil {
+	if _, err := h.ensureLocalProfileFile(); err != nil {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
 			Error:   "No parsed CV profile found. Upload your CV first.",
@@ -331,7 +411,7 @@ func (h *Handler) RunPipeline(c *gin.Context) {
 	}
 
 	// Run async
-	go runPipelineAsync(h.cfg)
+	go runPipelineAsync(h.cfg, h.store)
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
@@ -341,6 +421,15 @@ func (h *Handler) RunPipeline(c *gin.Context) {
 
 // GetPipelineStatus returns current pipeline run status
 func (h *Handler) GetPipelineStatus(c *gin.Context) {
+	if pipelineState.Status != "running" && h.store != nil && h.store.Enabled() {
+		latest, err := h.store.GetLatestPipelineStatus()
+		if err != nil {
+			log.Printf("⚠️  Failed to fetch latest pipeline status from Supabase: %v", err)
+		} else if latest != nil {
+			pipelineState = *latest
+		}
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data:    pipelineState,
@@ -349,7 +438,7 @@ func (h *Handler) GetPipelineStatus(c *gin.Context) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-func runPipelineAsync(cfg *config.Config) {
+func runPipelineAsync(cfg *config.Config, supabaseStore *store.SupabaseStore) {
 	startedAt := time.Now()
 	updatePipelineStatus(func(state *models.PipelineStatus) {
 		state.Status = "running"
@@ -361,19 +450,44 @@ func runPipelineAsync(cfg *config.Config) {
 		state.TopScore = 0
 	})
 
+	cvVersionID := ""
+	pipelineRunID := ""
+	if supabaseStore != nil && supabaseStore.Enabled() {
+		cvVersion, err := supabaseStore.GetActiveCVVersion()
+		if err != nil {
+			log.Printf("⚠️  Could not load active CV version from Supabase: %v", err)
+		} else if cvVersion != nil {
+			cvVersionID = cvVersion.ID
+		} else if profileData, readErr := readJSONFile(profileJSONPath); readErr == nil {
+			savedVersion, saveErr := supabaseStore.SaveCVVersion(profileData, "migrated-profile.json")
+			if saveErr != nil {
+				log.Printf("⚠️  Could not backfill local CV profile into Supabase: %v", saveErr)
+			} else if savedVersion != nil {
+				cvVersionID = savedVersion.ID
+			}
+		}
+
+		runID, err := supabaseStore.CreatePipelineRun(cvVersionID, pipelineState)
+		if err != nil {
+			log.Printf("⚠️  Could not create pipeline run in Supabase: %v", err)
+		} else {
+			pipelineRunID = runID
+		}
+	}
+
 	if _, err := os.Stat(profileJSONPath); err != nil {
-		failPipeline(startedAt, "No parsed CV profile found. Upload your CV first.")
+		failPipeline(startedAt, "No parsed CV profile found. Upload your CV first.", supabaseStore, pipelineRunID)
 		return
 	}
 
 	if _, err := runPythonScript(cfg, "scraper/scraper.py", "data/profile.json", "data/jobs_raw.json"); err != nil {
-		failPipeline(startedAt, "Scraper failed: "+err.Error())
+		failPipeline(startedAt, "Scraper failed: "+err.Error(), supabaseStore, pipelineRunID)
 		return
 	}
 
 	rawJobs, err := readJobsFile(rawJobsJSONPath)
 	if err != nil {
-		failPipeline(startedAt, "Could not read scraped jobs: "+err.Error())
+		failPipeline(startedAt, "Could not read scraped jobs: "+err.Error(), supabaseStore, pipelineRunID)
 		return
 	}
 
@@ -384,21 +498,29 @@ func runPipelineAsync(cfg *config.Config) {
 		state.JobsFound = len(rawJobs)
 		state.Message = "Matching jobs to your CV..."
 	})
+	persistPipelineState(supabaseStore, pipelineRunID)
 
 	if _, err := runPythonScript(cfg, "matcher/matcher.py", "data/profile.json", "data/jobs_raw.json", "data/jobs_matched.json", "0"); err != nil {
-		failPipeline(startedAt, "Matcher failed: "+err.Error())
+		failPipeline(startedAt, "Matcher failed: "+err.Error(), supabaseStore, pipelineRunID)
 		return
 	}
 
 	matchedJobs, err := readJobsFile(matchedJobsPath)
 	if err != nil {
-		failPipeline(startedAt, "Could not read matched jobs: "+err.Error())
+		failPipeline(startedAt, "Could not read matched jobs: "+err.Error(), supabaseStore, pipelineRunID)
 		return
 	}
 
 	jobMu.Lock()
 	jobStore = matchedJobs
 	jobMu.Unlock()
+
+	if supabaseStore != nil && supabaseStore.Enabled() {
+		if err := supabaseStore.SyncJobsAndMatches(cvVersionID, rawJobs, matchedJobs); err != nil {
+			failPipeline(startedAt, "Could not persist jobs to Supabase: "+err.Error(), supabaseStore, pipelineRunID)
+			return
+		}
+	}
 
 	topScore := 0.0
 	if len(matchedJobs) > 0 {
@@ -414,6 +536,7 @@ func runPipelineAsync(cfg *config.Config) {
 		state.TopScore = topScore
 		state.Message = "Preparing matched jobs..."
 	})
+	persistPipelineState(supabaseStore, pipelineRunID)
 
 	if cfg.TelegramToken != "" && cfg.TelegramChatID != "" {
 		updatePipelineStatus(func(state *models.PipelineStatus) {
@@ -425,9 +548,10 @@ func runPipelineAsync(cfg *config.Config) {
 			state.TopScore = topScore
 			state.Message = "Sending Telegram digest..."
 		})
+		persistPipelineState(supabaseStore, pipelineRunID)
 
 		if _, err := runPythonScript(cfg, "notifier/telegram.py", "digest", "data/jobs_matched.json", "data/profile.json"); err != nil {
-			failPipeline(startedAt, "Jobs matched, but Telegram digest failed: "+err.Error())
+			failPipeline(startedAt, "Jobs matched, but Telegram digest failed: "+err.Error(), supabaseStore, pipelineRunID)
 			return
 		}
 	}
@@ -446,6 +570,7 @@ func runPipelineAsync(cfg *config.Config) {
 		state.TopScore = topScore
 		state.Message = finalMessage
 	})
+	persistPipelineState(supabaseStore, pipelineRunID)
 }
 
 func readJSONFile(path string) (map[string]interface{}, error) {
@@ -517,12 +642,13 @@ func updatePipelineStatus(mutator func(*models.PipelineStatus)) {
 	mutator(&pipelineState)
 }
 
-func failPipeline(lastRun time.Time, message string) {
+func failPipeline(lastRun time.Time, message string, supabaseStore *store.SupabaseStore, pipelineRunID string) {
 	updatePipelineStatus(func(state *models.PipelineStatus) {
 		state.Status = "error"
 		state.LastRun = lastRun
 		state.Message = message
 	})
+	persistPipelineState(supabaseStore, pipelineRunID)
 }
 
 func runPythonScript(cfg *config.Config, args ...string) (string, error) {
@@ -577,6 +703,34 @@ func (h *Handler) buildJobPayload(req models.CoverLetterRequest) models.Job {
 		if job.MatchScore == 0 {
 			job.MatchScore = found.MatchScore
 		}
+		return job
+	}
+
+	if h.store != nil && h.store.Enabled() {
+		found, err := h.store.GetJobByExternalKey(req.JobID)
+		if err == nil && found != nil {
+			if job.Title == "" {
+				job.Title = found.Title
+			}
+			if job.Company == "" {
+				job.Company = found.Company
+			}
+			if job.Location == "" {
+				job.Location = found.Location
+			}
+			if job.URL == "" {
+				job.URL = found.URL
+			}
+			if job.Description == "" {
+				job.Description = found.Description
+			}
+			if job.MatchScore == 0 {
+				job.MatchScore = found.MatchScore
+			}
+			if job.Source == "" {
+				job.Source = found.Source
+			}
+		}
 	}
 
 	return job
@@ -608,4 +762,72 @@ func writeTempJSON(payload interface{}) (string, error) {
 	}
 
 	return file.Name(), nil
+}
+
+func (h *Handler) loadProfileData() (map[string]interface{}, error) {
+	if h.store != nil && h.store.Enabled() {
+		cvVersion, err := h.store.GetActiveCVVersion()
+		if err != nil {
+			return nil, err
+		}
+		if cvVersion != nil {
+			if err := writeJSONMap(profileJSONPath, cvVersion.ProfileJSON); err != nil {
+				log.Printf("⚠️  Could not refresh local profile cache from Supabase: %v", err)
+			}
+			return cvVersion.ProfileJSON, nil
+		}
+
+		data, err := readJSONFile(profileJSONPath)
+		if err == nil {
+			if _, saveErr := h.store.SaveCVVersion(data, "migrated-profile.json"); saveErr != nil {
+				log.Printf("⚠️  Could not backfill local profile into Supabase: %v", saveErr)
+			}
+			return data, nil
+		}
+	}
+
+	return readJSONFile(profileJSONPath)
+}
+
+func (h *Handler) ensureLocalProfileFile() (map[string]interface{}, error) {
+	data, err := readJSONFile(profileJSONPath)
+	if err == nil {
+		if h.store != nil && h.store.Enabled() {
+			if cvVersion, lookupErr := h.store.GetActiveCVVersion(); lookupErr == nil && cvVersion == nil {
+				if _, saveErr := h.store.SaveCVVersion(data, "migrated-profile.json"); saveErr != nil {
+					log.Printf("⚠️  Could not backfill local profile into Supabase: %v", saveErr)
+				}
+			}
+		}
+		return data, nil
+	}
+
+	if h.store != nil && h.store.Enabled() {
+		return h.store.RestoreActiveProfile(profileJSONPath)
+	}
+
+	return nil, err
+}
+
+func writeJSONMap(path string, payload map[string]interface{}) error {
+	if err := os.MkdirAll("../data", 0o755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0o644)
+}
+
+func persistPipelineState(supabaseStore *store.SupabaseStore, pipelineRunID string) {
+	if supabaseStore == nil || !supabaseStore.Enabled() || pipelineRunID == "" {
+		return
+	}
+
+	if err := supabaseStore.UpdatePipelineRun(pipelineRunID, pipelineState); err != nil {
+		log.Printf("⚠️  Failed to update pipeline state in Supabase: %v", err)
+	}
 }

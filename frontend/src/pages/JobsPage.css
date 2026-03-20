@@ -157,6 +157,11 @@ input[type="range"] {
   color: var(--text3);
 }
 
+.posted {
+  color: var(--accent2);
+  font-size: 12px;
+}
+
 .job-salary { font-size: 12.5px; color: var(--accent2); margin-top: 4px; }
 
 /* Score Badge */
