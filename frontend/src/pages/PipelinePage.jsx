@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '../lib/api'
 import './PipelinePage.css'
 
 const STEPS = [
@@ -45,7 +45,7 @@ export default function PipelinePage() {
 
   const fetchStatus = async () => {
     try {
-      const res = await axios.get('/api/v1/pipeline/status')
+      const res = await api.get('/api/v1/pipeline/status')
       if (res.data.data) setPipeline(res.data.data)
     } catch (err) {
       setError(err.response?.data?.error || 'Could not load pipeline status.')
@@ -55,7 +55,7 @@ export default function PipelinePage() {
   const runPipeline = async () => {
     setError('')
     try {
-      await axios.post('/api/v1/pipeline/run')
+      await api.post('/api/v1/pipeline/run')
       fetchStatus()
     } catch (err) {
       setError(err.response?.data?.error || 'Could not start the pipeline.')

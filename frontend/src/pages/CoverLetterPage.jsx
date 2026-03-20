@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import axios from 'axios'
+import api from '../lib/api'
 import './CoverLetterPage.css'
 
 const MOCK_COVER_LETTER = `Dear Hiring Team at Zalando,
@@ -28,7 +28,7 @@ export default function CoverLetterPage({ job }) {
     setLoading(true)
     setError('')
     try {
-      const res = await axios.post('/api/v1/cover-letter', {
+      const res = await api.post('/api/v1/cover-letter', {
         job_id: job.id,
         job_title: job.title,
         company: job.company,

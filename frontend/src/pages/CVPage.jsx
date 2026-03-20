@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import axios from 'axios'
+import api from '../lib/api'
 import './CVPage.css'
 
 const MOCK_PROFILE = {
@@ -35,12 +35,12 @@ export default function CVPage() {
     form.append('cv', file)
 
     try {
-      const res = await axios.post('/api/v1/cv/parse', form, {
+      const res = await api.post('/api/v1/cv/parse', form, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       setUploaded(true)
       // Fetch updated profile
-      const profileRes = await axios.get('/api/v1/cv/profile')
+      const profileRes = await api.get('/api/v1/cv/profile')
       if (profileRes.data.data) setProfile(profileRes.data.data)
     } catch (err) {
       setUploaded(false)

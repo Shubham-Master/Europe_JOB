@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '../lib/api'
 import './JobsPage.css'
 
 function ScoreBadge({ score }) {
@@ -24,7 +24,7 @@ export default function JobsPage({ onJobSelect }) {
     setLoading(true)
     setError('')
     try {
-      const res = await axios.get('/api/v1/jobs')
+      const res = await api.get('/api/v1/jobs')
       setJobs(Array.isArray(res.data.data) ? res.data.data : [])
     } catch (err) {
       setError(err.response?.data?.error || 'Could not load jobs. Run the pipeline and try again.')
@@ -34,7 +34,7 @@ export default function JobsPage({ onJobSelect }) {
 
   const markSeen = async (jobId) => {
     try {
-      await axios.put(`/api/v1/jobs/${jobId}/seen`)
+      await api.put(`/api/v1/jobs/${jobId}/seen`)
     } catch {}
   }
 

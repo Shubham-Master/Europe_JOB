@@ -86,3 +86,11 @@ Render deployment is configured through:
 - [Dockerfile](/Users/ankitakant/Desktop/Shubham/GIT/Europe_JOB/Dockerfile)
 
 Use Render Blueprint import after pushing the latest code to GitHub.
+
+If the frontend is deployed separately on Vercel, set:
+
+```env
+VITE_API_BASE_URL=https://your-render-backend.onrender.com
+```
+
+Without this, the Vercel frontend will call its own `/api/...` routes and return `404`.
