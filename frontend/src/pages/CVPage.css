@@ -11,10 +11,12 @@
 
 .empty-card,
 .history-card {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 
 .empty-title {
@@ -36,7 +38,9 @@
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 .upload-zone:hover, .upload-zone.drag-over {
   border-color: var(--accent);
@@ -50,13 +54,15 @@
 
 /* Profile */
 .profile-card {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 
 .profile-header { display: flex; gap: 16px; align-items: flex-start; }
@@ -120,7 +126,7 @@
 }
 
 .history-item {
-  background: var(--bg3);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.018)), var(--bg3);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;

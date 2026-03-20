@@ -54,6 +54,7 @@ func main() {
 
 		// Cover Letter
 		v1.POST("/cover-letter", h.GenerateCoverLetter) // POST /api/v1/cover-letter
+		v1.POST("/guide-chat", h.GuideChat)             // POST /api/v1/guide-chat
 
 		// Pipeline
 		pipeline := v1.Group("/pipeline")

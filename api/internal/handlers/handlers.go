@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -390,6 +391,20 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 	})
 }
 
+// GuideChat answers short onboarding questions about this app.
+func (h *Handler) GuideChat(c *gin.Context) {
+	var req models.GuideChatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Data:    buildGuideReply(req),
+	})
+}
+
 // ─── Pipeline ─────────────────────────────────────────────────────────────────
 
 // RunPipeline manually triggers the full scrape + match pipeline
@@ -437,6 +452,50 @@ func (h *Handler) GetPipelineStatus(c *gin.Context) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+func buildGuideReply(req models.GuideChatRequest) gin.H {
+	message := strings.ToLower(strings.TrimSpace(req.Message))
+	page := req.Page
+	selectedJob := strings.TrimSpace(req.SelectedJobTitle)
+	country := strings.TrimSpace(req.CountryFilter)
+
+	reply := "I can help with CV upload, pipeline flow, job filters, and cover letter generation. Ask about the step you are blocked on and I will point you to the next action."
+	route := "none"
+
+	switch {
+	case strings.Contains(message, "filter"):
+		reply = "Filters narrow jobs by country, keywords, and score. Start with the country first, then increase the minimum score only after results are already visible."
+		if country != "" && strings.ToLower(country) != "all" {
+			reply = "Filters narrow jobs by country, keywords, and score. You are currently focused on " + country + ", so keep that country filter and adjust the score gradually instead of jumping too high."
+		}
+		route = "/jobs"
+	case strings.Contains(message, "start"):
+		reply = "Start on My CV, upload your latest PDF, then run Pipeline once. After that, open Jobs, review the best matches, and generate a cover letter for a selected role."
+		route = "/cv"
+	case strings.Contains(message, "no jobs"), strings.Contains(message, "missing"), strings.Contains(message, "empty"):
+		reply = "If no jobs are showing yet, the most common reason is that Pipeline has not run against your latest CV. Upload your CV first, then run Pipeline once and refresh Jobs."
+		route = "/pipeline"
+	case strings.HasPrefix(page, "/cover-letter") && selectedJob == "":
+		reply = "The Cover Letter page stays empty until you select a role in Jobs. Pick a job there first, then come back here to generate tailored content."
+		route = "/jobs"
+	case strings.HasPrefix(page, "/cover-letter"):
+		reply = "This page uses the role selected from Jobs. If the content looks outdated, return to Jobs, choose the role again, and regenerate the cover letter."
+		route = "/jobs"
+	case strings.HasPrefix(page, "/pipeline"):
+		reply = "Pipeline scrapes roles, matches them against your CV, and prepares ranked results. Run it after every important CV update so your matches stay relevant."
+		route = "/pipeline"
+	case strings.HasPrefix(page, "/cv"):
+		reply = "Upload a clean PDF resume with readable headings and bullet points. Once parsing finishes, your profile preview and CV history will appear here."
+	case !req.HasProfile:
+		reply = "Before anything else, upload your CV on My CV. The rest of the app becomes useful only after your profile is parsed."
+		route = "/cv"
+	}
+
+	return gin.H{
+		"reply":           reply,
+		"suggested_route": route,
+	}
+}
 
 func runPipelineAsync(cfg *config.Config, supabaseStore *store.SupabaseStore) {
 	startedAt := time.Now()

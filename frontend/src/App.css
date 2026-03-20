@@ -1,15 +1,22 @@
 .app {
+  position: relative;
   display: flex;
   min-height: 100vh;
+  isolation: isolate;
 }
 
 .main {
+  position: relative;
+  z-index: 2;
   flex: 1;
-  margin-left: 220px;
-  padding: 32px;
-  max-width: 1200px;
+  margin-left: 236px;
+  padding: 34px 36px 42px;
+}
+
+.content-shell {
+  max-width: 1320px;
 }
 
 @media (max-width: 768px) {
-  .main { margin-left: 0; padding: 16px; padding-top: 70px; }
+  .main { margin-left: 0; padding: 16px; padding-top: 76px; }
 }

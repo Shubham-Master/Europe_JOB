@@ -87,6 +87,8 @@ export default function CoverLetterPage({ job }) {
   const activeJob = job || result?.job
   const bullets = result?.tailored_bullets || []
   const missing = result?.missing_skills || []
+  const coverLetterText = result?.cover_letter || ''
+  const wordCount = coverLetterText.trim() ? coverLetterText.trim().split(/\s+/).length : 0
 
   return (
     <div className="cl-page">
@@ -173,12 +175,12 @@ export default function CoverLetterPage({ job }) {
           {activeTab === 'letter' && (
             <div className="editor-wrap">
               <div className="editor-header">
-                <span className="editor-label">EDITABLE · ~{coverLetter.split(' ').length} words</span>
+                <span className="editor-label">EDITABLE · ~{wordCount} words</span>
                 <span className="editor-hint">Click anywhere to edit</span>
               </div>
               <textarea
                 className="cover-letter-editor"
-                value={result?.cover_letter || ''}
+                value={coverLetterText}
                 onChange={e => setResult(current => current ? { ...current, cover_letter: e.target.value } : current)}
                 rows={16}
               />

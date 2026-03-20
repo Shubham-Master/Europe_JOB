@@ -8,7 +8,7 @@ function ScoreBadge({ score }) {
   return <span className={`score-badge ${cls}`}>{label} {score}%</span>
 }
 
-export default function JobsPage({ onJobSelect }) {
+export default function JobsPage({ onJobSelect, onSceneChange }) {
   const [jobs, setJobs]       = useState([])
   const [country, setCountry] = useState('All')
   const [minScore, setMinScore] = useState(0)
@@ -20,6 +20,10 @@ export default function JobsPage({ onJobSelect }) {
   useEffect(() => {
     fetchJobs()
   }, [])
+
+  useEffect(() => {
+    onSceneChange?.(country)
+  }, [country, onSceneChange])
 
   const fetchJobs = async () => {
     setLoading(true)

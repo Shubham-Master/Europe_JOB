@@ -55,10 +55,12 @@
 .no-job-state h3 { color: var(--text); font-size: 18px; margin-bottom: 8px; }
 
 .history-panel {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 
 .history-panel-title {
@@ -80,7 +82,7 @@
 }
 
 .history-entry {
-  background: var(--bg3);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.018)), var(--bg3);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
@@ -127,10 +129,12 @@
 
 /* Editor */
 .editor-wrap {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 
 .editor-header {
@@ -167,10 +171,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 14px 16px;
+  backdrop-filter: blur(16px);
 }
 
 .bullet-text { flex: 1; font-size: 14px; line-height: 1.5; color: var(--text); }

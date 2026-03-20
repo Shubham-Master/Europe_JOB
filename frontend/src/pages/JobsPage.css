@@ -30,12 +30,14 @@
 .stats-row { display: flex; gap: 12px; }
 
 .stat {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 16px;
   text-align: center;
   min-width: 64px;
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow);
 }
 
 .stat-num {
@@ -62,35 +64,38 @@
 .search-input {
   flex: 1;
   min-width: 200px;
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 14px;
   color: var(--text);
   font-size: 13.5px;
   transition: border-color 0.15s;
+  backdrop-filter: blur(14px);
 }
 
 .search-input:focus { border-color: var(--border2); }
 .search-input::placeholder { color: var(--text3); }
 
 .filter-select {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 14px;
   color: var(--text);
   font-size: 13.5px;
+  backdrop-filter: blur(14px);
 }
 
 .score-filter {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 14px;
+  backdrop-filter: blur(14px);
 }
 
 .filter-label { font-size: 12px; color: var(--text3); white-space: nowrap; }
@@ -105,7 +110,7 @@ input[type="range"] {
 .jobs-list { display: flex; flex-direction: column; gap: 10px; }
 
 .job-card {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
@@ -113,10 +118,16 @@ input[type="range"] {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s ease;
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow);
 }
 
-.job-card:hover { border-color: var(--border2); background: var(--bg3); }
+.job-card:hover {
+  border-color: var(--border2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.024)), var(--bg3);
+  transform: translateY(-2px);
+}
 .job-card.seen { opacity: 0.5; }
 
 .job-main { flex: 1; }
@@ -213,4 +224,6 @@ input[type="range"] {
   font-size: 14px;
   border: 1px dashed var(--border);
   border-radius: 10px;
+  background: rgba(8, 21, 33, 0.42);
+  backdrop-filter: blur(14px);
 }

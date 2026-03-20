@@ -1,35 +1,49 @@
 :root {
-  --bg:        #0a0a0a;
-  --bg2:       #111111;
-  --bg3:       #1a1a1a;
-  --border:    #2a2a2a;
-  --border2:   #333333;
-  --text:      #e8e8e8;
-  --text2:     #888888;
-  --text3:     #555555;
-  --accent:    #e8ff47;
-  --accent2:   #47ffb2;
-  --danger:    #ff4747;
-  --warn:      #ffb347;
-  --green:     #47ff8a;
+  --bg:        #06101a;
+  --bg2:       rgba(8, 21, 33, 0.72);
+  --bg3:       rgba(17, 35, 51, 0.74);
+  --border:    rgba(181, 212, 240, 0.12);
+  --border2:   rgba(221, 241, 255, 0.22);
+  --text:      #edf6ff;
+  --text2:     #a9bfd3;
+  --text3:     #6c8398;
+  --accent:    #ecff63;
+  --accent2:   #79edff;
+  --danger:    #ff7d7d;
+  --warn:      #ffc979;
+  --green:     #87ffb5;
   --mono:      'Space Mono', monospace;
   --sans:      'DM Sans', sans-serif;
+  --shadow:    0 24px 80px rgba(2, 8, 16, 0.38);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body, #root {
+  min-height: 100vh;
+}
+
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(circle at top left, rgba(77, 145, 255, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(120, 237, 255, 0.12), transparent 22%),
+    linear-gradient(180deg, #07111b 0%, #07131d 42%, #081723 100%);
   color: var(--text);
   font-family: var(--sans);
   font-size: 14px;
   line-height: 1.6;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+::selection {
+  background: rgba(236, 255, 99, 0.28);
+  color: var(--text);
+}
 
 button {
   cursor: pointer;

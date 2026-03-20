@@ -25,10 +25,12 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 
 .schedule-icon { font-size: 24px; }
@@ -49,10 +51,12 @@
 .schedule-badge.idle { background: var(--bg3); color: var(--text3); border-color: var(--border); }
 
 .status-banner {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 
 .status-title { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; font-family: var(--mono); }
@@ -65,13 +69,15 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
   margin-bottom: 4px;
   position: relative;
   transition: border-color 0.2s;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 
 .step.running { border-color: var(--accent); background: rgba(232, 255, 71, 0.03); }
@@ -92,10 +98,12 @@
 
 /* Result */
 .result-card {
-  background: var(--bg2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)), var(--bg2);
   border: 1px solid rgba(71, 255, 138, 0.2);
   border-radius: 10px;
   padding: 20px 24px;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
 }
 
 .result-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }

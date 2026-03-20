@@ -66,6 +66,14 @@ type CoverLetterResponse struct {
 	MissingSkills   []string `json:"missing_skills"`
 }
 
+type GuideChatRequest struct {
+	Message          string `json:"message" binding:"required"`
+	Page             string `json:"page"`
+	SelectedJobTitle string `json:"selected_job_title,omitempty"`
+	CountryFilter    string `json:"country_filter,omitempty"`
+	HasProfile       bool   `json:"has_profile,omitempty"`
+}
+
 // PipelineStatus tracks the current run
 type PipelineStatus struct {
 	Status      string    `json:"status"` // idle, running, done, error

@@ -1,0 +1,80 @@
+.scenic-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.scenic-scene-layer {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, var(--scene-tint), var(--scene-tint-strong)),
+    radial-gradient(circle at top left, var(--scene-glow-a), transparent 34%),
+    radial-gradient(circle at 80% 18%, var(--scene-glow-b), transparent 24%),
+    var(--scene-image);
+  background-position: center, center, center, var(--scene-position);
+  background-size: cover, auto, auto, cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transform: scale(1.03);
+  filter: saturate(0.92) brightness(0.72) contrast(1.04);
+  transition: opacity 0.8s ease;
+}
+
+.scenic-scene-layer.is-active {
+  opacity: 1;
+}
+
+.scenic-scene-layer.is-incoming {
+  z-index: 1;
+}
+
+.scenic-scene-layer.is-incoming.is-visible {
+  opacity: 1;
+}
+
+.scenic-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 96px 96px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.7), transparent 78%);
+  opacity: 0.18;
+}
+
+.scenic-orb {
+  position: absolute;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.55;
+  animation: scenicFloat 18s ease-in-out infinite;
+}
+
+.scenic-orb-left {
+  left: -80px;
+  bottom: 100px;
+  background: rgba(0, 238, 221, 0.12);
+}
+
+.scenic-orb-right {
+  right: 14%;
+  top: 12%;
+  background: rgba(204, 0, 238, 0.12);
+  animation-delay: -8s;
+}
+
+@keyframes scenicFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0);
+  }
+}

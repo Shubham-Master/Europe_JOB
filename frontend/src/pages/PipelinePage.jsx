@@ -6,7 +6,7 @@ const STEPS = [
   { id: 'scrape', label: 'Scrape Jobs', icon: '🕷️', desc: 'Adzuna API + RSS feeds' },
   { id: 'match', label: 'Match to CV', icon: '🎯', desc: 'Score against your profile' },
   { id: 'filter', label: 'Filter Top Jobs', icon: '⚡', desc: 'Prepare ranked matches' },
-  { id: 'notify', label: 'Send Notification', icon: '🔔', desc: 'Telegram digest when configured' },
+  { id: 'notify', label: 'Send Notification', icon: '🔔', desc: 'Digest notification when configured' },
 ]
 
 function getStepIndex(status) {
