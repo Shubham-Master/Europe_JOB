@@ -243,17 +243,11 @@ func (h *Handler) ParseCV(c *gin.Context) {
 		return
 	}
 
-	outputPath := profileJSONPath
-	if h.store != nil && h.store.Enabled() {
-		outputPath = tempProfilePathForUser(userID)
-		defer os.Remove(outputPath)
-	}
-
 	// Run Python CV parser
 	cmd := exec.Command(h.cfg.PythonPath,
 		"../cv_parser/cv_parser.py",
 		tmpPath,
-		outputPath,
+		profileJSONPath,
 	)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -267,7 +261,7 @@ func (h *Handler) ParseCV(c *gin.Context) {
 		return
 	}
 
-	profileData, err := readJSONFile(outputPath)
+	profileData, err := readJSONFile(profileJSONPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
@@ -921,10 +915,9 @@ func (h *Handler) loadProfileData(userID string) (map[string]interface{}, error)
 func (h *Handler) ensureLocalProfileFile(userID string) (string, func(), error) {
 	if h.store != nil && h.store.Enabled() {
 		path, err := createProfileFileForUser(userID, h.store)
-		if err != nil {
-			return "", nil, err
+		if err == nil {
+			return path, func() { os.Remove(path) }, nil
 		}
-		return path, func() { os.Remove(path) }, nil
 	}
 
 	if _, err := os.Stat(profileJSONPath); err != nil {
@@ -1091,10 +1084,9 @@ func createProfileFileForUser(userID string, supabaseStore *store.SupabaseStore)
 func createProfileFileForPipeline(userID string, supabaseStore *store.SupabaseStore) (string, func(), error) {
 	if supabaseStore != nil && supabaseStore.Enabled() {
 		path, err := createProfileFileForUser(userID, supabaseStore)
-		if err != nil {
-			return "", nil, err
+		if err == nil {
+			return path, func() { os.Remove(path) }, nil
 		}
-		return path, func() { os.Remove(path) }, nil
 	}
 
 	if _, err := os.Stat(profileJSONPath); err != nil {

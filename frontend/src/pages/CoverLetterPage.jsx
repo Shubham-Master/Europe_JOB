@@ -39,14 +39,10 @@ function escapeHtml(value) {
 }
 
 function openPrintableDocument({ title, subtitle, content }) {
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1100')
-  if (!printWindow) return false
-
   const safeContent = escapeHtml(content)
   const safeTitle = escapeHtml(title)
   const safeSubtitle = escapeHtml(subtitle)
-
-  printWindow.document.write(`
+  const html = `
     <!doctype html>
     <html>
       <head>
@@ -120,8 +116,18 @@ function openPrintableDocument({ title, subtitle, content }) {
         </script>
       </body>
     </html>
-  `)
-  printWindow.document.close()
+  `
+
+  const blob = new Blob([html], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const printWindow = window.open(url, '_blank')
+  if (!printWindow) {
+    URL.revokeObjectURL(url)
+    return false
+  }
+
+  const cleanup = () => URL.revokeObjectURL(url)
+  printWindow.addEventListener('beforeunload', cleanup, { once: true })
   return true
 }
 
