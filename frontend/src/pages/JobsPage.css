@@ -1,5 +1,14 @@
 .jobs-page { display: flex; flex-direction: column; gap: 24px; }
 
+.page-error {
+  background: rgba(255, 71, 71, 0.08);
+  border: 1px solid rgba(255, 71, 71, 0.22);
+  color: #ff9f9f;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+}
+
 .page-header {
   display: flex;
   align-items: flex-start;

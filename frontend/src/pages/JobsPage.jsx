@@ -1,18 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import axios from 'axios'
 import './JobsPage.css'
-
-const COUNTRIES = ['All', 'Germany', 'Netherlands', 'France', 'United Kingdom', 'Belgium', 'Switzerland']
-
-const MOCK_JOBS = [
-  { id: '1', title: 'Senior Backend Engineer', company: 'Zalando', location: 'Berlin, Germany', country: 'Germany', match_score: 84, salary: '€80,000 - €110,000', source: 'adzuna', url: '#', seen: false },
-  { id: '2', title: 'Python Developer', company: 'ING Bank', location: 'Amsterdam, Netherlands', country: 'Netherlands', match_score: 71, salary: '€65,000 - €85,000', source: 'adzuna', url: '#', seen: false },
-  { id: '3', title: 'Full Stack Engineer', company: 'N26', location: 'Berlin, Germany', country: 'Germany', match_score: 66, salary: '€70,000 - €95,000', source: 'rss', url: '#', seen: true },
-  { id: '4', title: 'Software Engineer', company: 'Spotify', location: 'Stockholm, Sweden', country: 'Sweden', match_score: 58, salary: '€75,000 - €100,000', source: 'adzuna', url: '#', seen: false },
-  { id: '5', title: 'Java Developer', company: 'SAP', location: 'Munich, Germany', country: 'Germany', match_score: 32, salary: '€60,000 - €80,000', source: 'rss', url: '#', seen: false },
-  { id: '6', title: 'DevOps Engineer', company: 'Adyen', location: 'Amsterdam, Netherlands', country: 'Netherlands', match_score: 61, salary: '€70,000 - €90,000', source: 'adzuna', url: '#', seen: false },
-  { id: '7', title: 'Data Engineer', company: 'Booking.com', location: 'Amsterdam, Netherlands', country: 'Netherlands', match_score: 75, salary: '€72,000 - €95,000', source: 'adzuna', url: '#', seen: false },
-]
 
 function ScoreBadge({ score }) {
   const cls = score >= 75 ? 'excellent' : score >= 55 ? 'good' : score >= 35 ? 'fair' : 'low'
@@ -21,30 +9,73 @@ function ScoreBadge({ score }) {
 }
 
 export default function JobsPage({ onJobSelect }) {
-  const [jobs, setJobs]           = useState(MOCK_JOBS)
-  const [country, setCountry]     = useState('All')
-  const [minScore, setMinScore]   = useState(0)
-  const [loading, setLoading]     = useState(false)
-  const [search, setSearch]       = useState('')
+  const [jobs, setJobs]       = useState([])
+  const [country, setCountry] = useState('All')
+  const [minScore, setMinScore] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch]   = useState('')
+  const [error, setError]     = useState('')
 
-  const filtered = jobs.filter(j => {
-    if (country !== 'All' && j.country !== country) return false
-    if (j.match_score < minScore) return false
-    if (search && !j.title.toLowerCase().includes(search.toLowerCase()) &&
-        !j.company.toLowerCase().includes(search.toLowerCase())) return false
+  useEffect(() => {
+    fetchJobs()
+  }, [])
+
+  const fetchJobs = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await axios.get('/api/v1/jobs')
+      setJobs(Array.isArray(res.data.data) ? res.data.data : [])
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not load jobs. Run the pipeline and try again.')
+    }
+    setLoading(false)
+  }
+
+  const markSeen = async (jobId) => {
+    try {
+      await axios.put(`/api/v1/jobs/${jobId}/seen`)
+    } catch {}
+  }
+
+  const updateSeenLocally = (jobId) => {
+    setJobs(current => current.map(job => (
+      job.id === jobId ? { ...job, seen: true } : job
+    )))
+  }
+
+  const openJob = (job) => {
+    markSeen(job.id)
+    updateSeenLocally(job.id)
+    window.open(job.url, '_blank', 'noopener,noreferrer')
+  }
+
+  const selectJob = (job) => {
+    markSeen(job.id)
+    updateSeenLocally(job.id)
+    onJobSelect({ ...job, seen: true })
+  }
+
+  const countries = ['All', ...new Set(jobs.map(job => job.country).filter(Boolean))]
+
+  const filtered = jobs.filter(job => {
+    if (country !== 'All' && job.country !== country) return false
+    if (job.match_score < minScore) return false
+    if (search &&
+        !job.title.toLowerCase().includes(search.toLowerCase()) &&
+        !job.company.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
 
   const stats = {
     total: jobs.length,
-    excellent: jobs.filter(j => j.match_score >= 75).length,
-    good: jobs.filter(j => j.match_score >= 55 && j.match_score < 75).length,
-    unseen: jobs.filter(j => !j.seen).length,
+    excellent: jobs.filter(job => job.match_score >= 75).length,
+    good: jobs.filter(job => job.match_score >= 55 && job.match_score < 75).length,
+    unseen: jobs.filter(job => !job.seen).length,
   }
 
   return (
     <div className="jobs-page">
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Job Matches</h1>
@@ -58,7 +89,6 @@ export default function JobsPage({ onJobSelect }) {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="filters">
         <input
           className="search-input"
@@ -67,7 +97,7 @@ export default function JobsPage({ onJobSelect }) {
           onChange={e => setSearch(e.target.value)}
         />
         <select className="filter-select" value={country} onChange={e => setCountry(e.target.value)}>
-          {COUNTRIES.map(c => <option key={c}>{c}</option>)}
+          {countries.map(item => <option key={item}>{item}</option>)}
         </select>
         <div className="score-filter">
           <span className="filter-label">Min Score</span>
@@ -80,12 +110,20 @@ export default function JobsPage({ onJobSelect }) {
         </div>
       </div>
 
-      {/* Job List */}
+      {error && <div className="page-error">{error}</div>}
+
       <div className="jobs-list">
-        {filtered.length === 0 && (
-          <div className="empty-state">No jobs match your filters</div>
+        {loading && (
+          <div className="empty-state">Loading matched jobs...</div>
         )}
-        {filtered.map(job => (
+
+        {!loading && filtered.length === 0 && (
+          <div className="empty-state">
+            {jobs.length === 0 ? 'No matched jobs yet. Run the pipeline after uploading your CV.' : 'No jobs match your filters'}
+          </div>
+        )}
+
+        {!loading && filtered.map(job => (
           <div key={job.id} className={`job-card ${job.seen ? 'seen' : ''}`}>
             <div className="job-main">
               <div className="job-top">
@@ -104,10 +142,10 @@ export default function JobsPage({ onJobSelect }) {
               {job.salary && <div className="job-salary">💰 {job.salary}</div>}
             </div>
             <div className="job-actions">
-              <button className="btn-ghost" onClick={() => window.open(job.url, '_blank')}>
+              <button className="btn-ghost" onClick={() => openJob(job)}>
                 View Job ↗
               </button>
-              <button className="btn-primary" onClick={() => onJobSelect(job)}>
+              <button className="btn-primary" onClick={() => selectJob(job)}>
                 ✍️ Generate Cover Letter
               </button>
             </div>

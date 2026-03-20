@@ -10,9 +10,11 @@ import time
 import hashlib
 import requests
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(PROJECT_ROOT / ".env")
 
 # European countries supported by Adzuna
 EUROPEAN_COUNTRIES = {

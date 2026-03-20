@@ -1,7 +1,6 @@
 # Europe Job Hunter - Dependencies
 
 # CV Parsing
-anthropic>=0.25.0
 pdfplumber>=0.10.0
 
 # Scraping

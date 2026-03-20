@@ -1,113 +1,150 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import axios from 'axios'
 import './PipelinePage.css'
 
 const STEPS = [
-  { id: 'scrape',  label: 'Scrape Jobs',      icon: '🕷️', desc: 'Adzuna API + RSS feeds'     },
-  { id: 'match',   label: 'Match to CV',       icon: '🎯', desc: 'Score against your profile' },
-  { id: 'filter',  label: 'Filter Top Jobs',   icon: '⚡', desc: 'Keep score ≥ 55%'           },
-  { id: 'notify',  label: 'Send Notification', icon: '🔔', desc: 'Telegram digest'             },
+  { id: 'scrape', label: 'Scrape Jobs', icon: '🕷️', desc: 'Adzuna API + RSS feeds' },
+  { id: 'match', label: 'Match to CV', icon: '🎯', desc: 'Score against your profile' },
+  { id: 'filter', label: 'Filter Top Jobs', icon: '⚡', desc: 'Prepare ranked matches' },
+  { id: 'notify', label: 'Send Notification', icon: '🔔', desc: 'Telegram digest when configured' },
 ]
 
+function getStepIndex(status) {
+  if (status === 'scrape') return 0
+  if (status === 'match') return 1
+  if (status === 'filter') return 2
+  if (status === 'notify') return 3
+  return -1
+}
+
 export default function PipelinePage() {
-  const [status, setStatus]   = useState('idle')
-  const [step, setStep]       = useState(-1)
-  const [lastRun, setLastRun] = useState(null)
-  const [result, setResult]   = useState(null)
+  const [pipeline, setPipeline] = useState({
+    status: 'idle',
+    current_step: 'idle',
+    last_run: null,
+    jobs_found: 0,
+    jobs_matched: 0,
+    top_score: 0,
+    message: 'Pipeline has not run yet',
+  })
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetchStatus()
+  }, [])
+
+  useEffect(() => {
+    if (pipeline.status !== 'running') return undefined
+
+    const timer = setInterval(() => {
+      fetchStatus()
+    }, 2000)
+
+    return () => clearInterval(timer)
+  }, [pipeline.status])
+
+  const fetchStatus = async () => {
+    try {
+      const res = await axios.get('/api/v1/pipeline/status')
+      if (res.data.data) setPipeline(res.data.data)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not load pipeline status.')
+    }
+  }
 
   const runPipeline = async () => {
-    setStatus('running')
-    setStep(0)
-    setResult(null)
-
-    // Simulate pipeline steps for demo
-    for (let i = 0; i < STEPS.length; i++) {
-      setStep(i)
-      await new Promise(r => setTimeout(r, 1200))
-    }
-
-    setStatus('done')
-    setStep(-1)
-    setLastRun(new Date())
-    setResult({ jobs_found: 142, jobs_matched: 38, top_score: 84 })
-
+    setError('')
     try {
       await axios.post('/api/v1/pipeline/run')
-    } catch {}
+      fetchStatus()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not start the pipeline.')
+    }
   }
+
+  const step = getStepIndex(pipeline.current_step)
+  const lastRun = pipeline.last_run ? new Date(pipeline.last_run) : null
+  const isDone = pipeline.status === 'done'
 
   return (
     <div className="pipeline-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Pipeline</h1>
-          <p className="page-sub">Manually trigger the full scrape → match → notify pipeline</p>
+          <p className="page-sub">Run the full scrape → match → notify flow against your uploaded CV</p>
         </div>
         <button
           className="btn-run"
           onClick={runPipeline}
-          disabled={status === 'running'}
+          disabled={pipeline.status === 'running'}
         >
-          {status === 'running' ? '⏳ Running...' : '▶ Run Pipeline'}
+          {pipeline.status === 'running' ? '⏳ Running...' : '▶ Run Pipeline'}
         </button>
       </div>
 
-      {/* Schedule Info */}
       <div className="schedule-card">
         <div className="schedule-icon">⏰</div>
         <div>
           <div className="schedule-title">Automatic Schedule</div>
-          <div className="schedule-sub">Runs daily at 8:00 AM via Go scheduler</div>
+          <div className="schedule-sub">Manual trigger is live now. Scheduler still needs final production wiring.</div>
         </div>
-        <div className="schedule-badge">Active</div>
+        <div className={`schedule-badge ${pipeline.status}`}>{pipeline.status}</div>
       </div>
 
-      {/* Pipeline Steps */}
+      {error && <div className="page-error">{error}</div>}
+
+      <div className="status-banner">
+        <div className="status-title">Current Status</div>
+        <div className="status-text">{pipeline.message || 'Waiting to run...'}</div>
+      </div>
+
       <div className="steps">
-        {STEPS.map((s, i) => {
-          const isDone    = status === 'done' || (status === 'running' && i < step)
-          const isRunning = status === 'running' && i === step
-          const isPending = status === 'idle' || (status === 'running' && i > step)
+        {STEPS.map((item, index) => {
+          const done = isDone || (pipeline.status === 'running' && index < step)
+          const running = pipeline.status === 'running' && index === step
+          const failed = pipeline.status === 'error' && index === step
+          const pending = !done && !running && !failed
 
           return (
-            <div key={s.id} className={`step ${isDone ? 'done' : isRunning ? 'running' : 'pending'}`}>
-              <div className="step-icon">{isRunning ? '⏳' : isDone ? '✅' : s.icon}</div>
+            <div key={item.id} className={`step ${done ? 'done' : running ? 'running' : failed ? 'failed' : 'pending'}`}>
+              <div className="step-icon">{running ? '⏳' : done ? '✅' : failed ? '⚠️' : item.icon}</div>
               <div className="step-info">
-                <div className="step-label">{s.label}</div>
-                <div className="step-desc">{s.desc}</div>
+                <div className="step-label">{item.label}</div>
+                <div className="step-desc">{item.desc}</div>
               </div>
               <div className="step-status">
-                {isDone && <span className="badge-done">Done</span>}
-                {isRunning && <span className="badge-running">Running</span>}
-                {isPending && <span className="badge-pending">Pending</span>}
+                {done && <span className="badge-done">Done</span>}
+                {running && <span className="badge-running">Running</span>}
+                {failed && <span className="badge-error">Failed</span>}
+                {pending && <span className="badge-pending">Pending</span>}
               </div>
-              {i < STEPS.length - 1 && <div className="step-connector" />}
             </div>
           )
         })}
       </div>
 
-      {/* Result */}
-      {result && (
+      {(pipeline.jobs_found > 0 || pipeline.jobs_matched > 0 || lastRun) && (
         <div className="result-card">
-          <h3 className="result-title">✅ Last Run Results</h3>
+          <h3 className="result-title">{pipeline.status === 'error' ? '⚠ Last Run State' : '✅ Last Run Results'}</h3>
           <div className="result-stats">
             <div className="result-stat">
-              <span className="result-num">{result.jobs_found}</span>
+              <span className="result-num">{pipeline.jobs_found}</span>
               <span className="result-label">Jobs Found</span>
             </div>
             <div className="result-stat">
-              <span className="result-num accent">{result.jobs_matched}</span>
-              <span className="result-label">Matched (≥55%)</span>
+              <span className="result-num accent">{pipeline.jobs_matched}</span>
+              <span className="result-label">Matched</span>
             </div>
             <div className="result-stat">
-              <span className="result-num green">{result.top_score}%</span>
+              <span className="result-num green">{pipeline.top_score || 0}%</span>
               <span className="result-label">Top Score</span>
             </div>
           </div>
-          <div className="result-time">
-            Ran at {lastRun?.toLocaleTimeString()} · {lastRun?.toLocaleDateString()}
-          </div>
+          {lastRun && (
+            <div className="result-time">
+              Ran at {lastRun.toLocaleTimeString()} · {lastRun.toLocaleDateString()}
+            </div>
+          )}
         </div>
       )}
     </div>

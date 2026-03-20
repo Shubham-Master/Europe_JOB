@@ -3,8 +3,11 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"time"
 
@@ -17,7 +20,17 @@ import (
 var (
 	jobStore      []models.Job
 	jobMu         sync.RWMutex
-	pipelineState = models.PipelineStatus{Status: "idle"}
+	pipelineState = models.PipelineStatus{
+		Status:      "idle",
+		CurrentStep: "idle",
+		Message:     "Pipeline has not run yet",
+	}
+)
+
+const (
+	profileJSONPath = "../data/profile.json"
+	rawJobsJSONPath = "../data/jobs_raw.json"
+	matchedJobsPath = "../data/jobs_matched.json"
 )
 
 type Handler struct {
@@ -45,6 +58,14 @@ func (h *Handler) Health(c *gin.Context) {
 
 // GetJobs returns all scraped jobs, optionally filtered
 func (h *Handler) GetJobs(c *gin.Context) {
+	if err := loadJobsFromDisk(matchedJobsPath); err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "failed to load saved jobs: " + err.Error(),
+		})
+		return
+	}
+
 	country := c.Query("country")
 	minScore := c.Query("min_score")
 
@@ -73,6 +94,14 @@ func (h *Handler) GetJobs(c *gin.Context) {
 
 // GetJob returns a single job by ID
 func (h *Handler) GetJob(c *gin.Context) {
+	if err := loadJobsFromDisk(matchedJobsPath); err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "failed to load saved jobs: " + err.Error(),
+		})
+		return
+	}
+
 	id := c.Param("id")
 
 	jobMu.RLock()
@@ -90,6 +119,14 @@ func (h *Handler) GetJob(c *gin.Context) {
 
 // MarkJobSeen marks a job as seen
 func (h *Handler) MarkJobSeen(c *gin.Context) {
+	if err := loadJobsFromDisk(matchedJobsPath); err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "failed to load saved jobs: " + err.Error(),
+		})
+		return
+	}
+
 	id := c.Param("id")
 
 	jobMu.Lock()
@@ -98,6 +135,13 @@ func (h *Handler) MarkJobSeen(c *gin.Context) {
 	for i, job := range jobStore {
 		if job.ID == id {
 			jobStore[i].Seen = true
+			if err := writeJobsToDisk(matchedJobsPath, jobStore); err != nil {
+				c.JSON(http.StatusInternalServerError, models.APIResponse{
+					Success: false,
+					Error:   "failed to persist seen state",
+				})
+				return
+			}
 			c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "marked as seen"})
 			return
 		}
@@ -110,6 +154,14 @@ func (h *Handler) MarkJobSeen(c *gin.Context) {
 
 // ParseCV accepts a CV PDF upload and runs the Python cv_parser
 func (h *Handler) ParseCV(c *gin.Context) {
+	if h.cfg.GeminiKey == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "GEMINI_API_KEY is missing. Add it to your .env before parsing a CV.",
+		})
+		return
+	}
+
 	file, err := c.FormFile("cv")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: "no file uploaded"})
@@ -127,7 +179,7 @@ func (h *Handler) ParseCV(c *gin.Context) {
 	cmd := exec.Command(h.cfg.PythonPath,
 		"../cv_parser/cv_parser.py",
 		tmpPath,
-		"../data/profile.json",
+		profileJSONPath,
 	)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -150,7 +202,7 @@ func (h *Handler) ParseCV(c *gin.Context) {
 
 // GetProfile returns the current parsed CV profile
 func (h *Handler) GetProfile(c *gin.Context) {
-	data, err := readJSONFile("../data/profile.json")
+	data, err := readJSONFile(profileJSONPath)
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
@@ -171,11 +223,90 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 		return
 	}
 
-	// Will call python ai_tools/cover_letter.py in next phase
+	if h.cfg.GeminiKey == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "GEMINI_API_KEY is missing. Add it to your .env before generating cover letters.",
+		})
+		return
+	}
+
+	if _, err := os.Stat(profileJSONPath); err != nil {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error:   "No parsed CV profile found. Upload your CV first.",
+		})
+		return
+	}
+
+	job := h.buildJobPayload(req)
+	if job.Title == "" && job.Company == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "job details are incomplete; send at least a title or company",
+		})
+		return
+	}
+
+	jobPath, err := writeTempJSON(job)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "failed to prepare job payload",
+		})
+		return
+	}
+	defer os.Remove(jobPath)
+
+	outputFile, err := os.CreateTemp("", "cover-letter-result-*.json")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "failed to prepare cover letter output",
+		})
+		return
+	}
+	outputPath := outputFile.Name()
+	outputFile.Close()
+	defer os.Remove(outputPath)
+
+	cmd := exec.Command(
+		h.cfg.PythonPath,
+		"../ai_tools/cover_letter.py",
+		"--single",
+		jobPath,
+		profileJSONPath,
+		outputPath,
+	)
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errMsg := stderr.String()
+		if errMsg == "" {
+			errMsg = out.String()
+		}
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "cover letter generation failed: " + errMsg,
+		})
+		return
+	}
+
+	data, err := readJSONFile(outputPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "cover letter was generated but could not be read back",
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Message: "Cover letter generation coming soon!",
-		Data:    req,
+		Message: "Cover letter generated successfully",
+		Data:    data,
 	})
 }
 
@@ -187,6 +318,14 @@ func (h *Handler) RunPipeline(c *gin.Context) {
 		c.JSON(http.StatusConflict, models.APIResponse{
 			Success: false,
 			Error:   "Pipeline is already running",
+		})
+		return
+	}
+
+	if _, err := os.Stat(profileJSONPath); err != nil {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error:   "No parsed CV profile found. Upload your CV first.",
 		})
 		return
 	}
@@ -211,24 +350,106 @@ func (h *Handler) GetPipelineStatus(c *gin.Context) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 func runPipelineAsync(cfg *config.Config) {
-	pipelineState = models.PipelineStatus{
-		Status:  "running",
-		LastRun: time.Now(),
-		Message: "Scraping jobs...",
+	startedAt := time.Now()
+	updatePipelineStatus(func(state *models.PipelineStatus) {
+		state.Status = "running"
+		state.CurrentStep = "scrape"
+		state.LastRun = startedAt
+		state.Message = "Scraping jobs..."
+		state.JobsFound = 0
+		state.JobsMatched = 0
+		state.TopScore = 0
+	})
+
+	if _, err := os.Stat(profileJSONPath); err != nil {
+		failPipeline(startedAt, "No parsed CV profile found. Upload your CV first.")
+		return
 	}
 
-	// TODO: call scraper, matcher, notifier Python scripts
-	time.Sleep(2 * time.Second) // placeholder
-
-	pipelineState = models.PipelineStatus{
-		Status:  "done",
-		LastRun: time.Now(),
-		Message: "Pipeline complete (scrapers coming soon)",
+	if _, err := runPythonScript(cfg, "scraper/scraper.py", "data/profile.json", "data/jobs_raw.json"); err != nil {
+		failPipeline(startedAt, "Scraper failed: "+err.Error())
+		return
 	}
+
+	rawJobs, err := readJobsFile(rawJobsJSONPath)
+	if err != nil {
+		failPipeline(startedAt, "Could not read scraped jobs: "+err.Error())
+		return
+	}
+
+	updatePipelineStatus(func(state *models.PipelineStatus) {
+		state.Status = "running"
+		state.CurrentStep = "match"
+		state.LastRun = startedAt
+		state.JobsFound = len(rawJobs)
+		state.Message = "Matching jobs to your CV..."
+	})
+
+	if _, err := runPythonScript(cfg, "matcher/matcher.py", "data/profile.json", "data/jobs_raw.json", "data/jobs_matched.json", "0"); err != nil {
+		failPipeline(startedAt, "Matcher failed: "+err.Error())
+		return
+	}
+
+	matchedJobs, err := readJobsFile(matchedJobsPath)
+	if err != nil {
+		failPipeline(startedAt, "Could not read matched jobs: "+err.Error())
+		return
+	}
+
+	jobMu.Lock()
+	jobStore = matchedJobs
+	jobMu.Unlock()
+
+	topScore := 0.0
+	if len(matchedJobs) > 0 {
+		topScore = matchedJobs[0].MatchScore
+	}
+
+	updatePipelineStatus(func(state *models.PipelineStatus) {
+		state.Status = "running"
+		state.CurrentStep = "filter"
+		state.LastRun = startedAt
+		state.JobsFound = len(rawJobs)
+		state.JobsMatched = len(matchedJobs)
+		state.TopScore = topScore
+		state.Message = "Preparing matched jobs..."
+	})
+
+	if cfg.TelegramToken != "" && cfg.TelegramChatID != "" {
+		updatePipelineStatus(func(state *models.PipelineStatus) {
+			state.Status = "running"
+			state.CurrentStep = "notify"
+			state.LastRun = startedAt
+			state.JobsFound = len(rawJobs)
+			state.JobsMatched = len(matchedJobs)
+			state.TopScore = topScore
+			state.Message = "Sending Telegram digest..."
+		})
+
+		if _, err := runPythonScript(cfg, "notifier/telegram.py", "digest", "data/jobs_matched.json", "data/profile.json"); err != nil {
+			failPipeline(startedAt, "Jobs matched, but Telegram digest failed: "+err.Error())
+			return
+		}
+	}
+
+	finalMessage := "Pipeline complete"
+	if cfg.TelegramToken == "" || cfg.TelegramChatID == "" {
+		finalMessage = "Pipeline complete (Telegram skipped)"
+	}
+
+	updatePipelineStatus(func(state *models.PipelineStatus) {
+		state.Status = "done"
+		state.CurrentStep = "done"
+		state.LastRun = startedAt
+		state.JobsFound = len(rawJobs)
+		state.JobsMatched = len(matchedJobs)
+		state.TopScore = topScore
+		state.Message = finalMessage
+	})
 }
 
 func readJSONFile(path string) (map[string]interface{}, error) {
-	data, err := exec.Command("cat", path).Output()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -239,12 +460,152 @@ func readJSONFile(path string) (map[string]interface{}, error) {
 	return result, nil
 }
 
+func readJobsFile(path string) ([]models.Job, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.Job{}, nil
+		}
+		return nil, err
+	}
+
+	var jobs []models.Job
+	if len(data) == 0 {
+		return []models.Job{}, nil
+	}
+	if err := json.Unmarshal(data, &jobs); err != nil {
+		return nil, err
+	}
+	return jobs, nil
+}
+
 func parseFloat(s string, f *float64) (float64, error) {
-	var val float64
-	_, err := bytes.NewBufferString(s), error(nil)
-	if err2 := json.Unmarshal([]byte(s), &val); err2 != nil {
-		return 0, err2
+	val, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, err
 	}
 	*f = val
 	return val, err
+}
+
+func loadJobsFromDisk(path string) error {
+	jobs, err := readJobsFile(path)
+	if err != nil {
+		return err
+	}
+
+	jobMu.Lock()
+	jobStore = jobs
+	jobMu.Unlock()
+	return nil
+}
+
+func writeJobsToDisk(path string, jobs []models.Job) error {
+	if err := os.MkdirAll("../data", 0o755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(jobs, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0o644)
+}
+
+func updatePipelineStatus(mutator func(*models.PipelineStatus)) {
+	mutator(&pipelineState)
+}
+
+func failPipeline(lastRun time.Time, message string) {
+	updatePipelineStatus(func(state *models.PipelineStatus) {
+		state.Status = "error"
+		state.LastRun = lastRun
+		state.Message = message
+	})
+}
+
+func runPythonScript(cfg *config.Config, args ...string) (string, error) {
+	cmd := exec.Command(cfg.PythonPath, args...)
+	cmd.Dir = ".."
+
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errMsg := stderr.String()
+		if errMsg == "" {
+			errMsg = out.String()
+		}
+		if errMsg == "" {
+			errMsg = err.Error()
+		}
+		return "", errors.New(errMsg)
+	}
+
+	return out.String(), nil
+}
+
+func (h *Handler) buildJobPayload(req models.CoverLetterRequest) models.Job {
+	job := models.Job{
+		ID:          req.JobID,
+		Title:       req.JobTitle,
+		Company:     req.Company,
+		Location:    req.Location,
+		URL:         req.JobURL,
+		Description: req.JobDesc,
+		MatchScore:  req.MatchScore,
+	}
+
+	if found, ok := findJobByID(req.JobID); ok {
+		if job.Title == "" {
+			job.Title = found.Title
+		}
+		if job.Company == "" {
+			job.Company = found.Company
+		}
+		if job.Location == "" {
+			job.Location = found.Location
+		}
+		if job.URL == "" {
+			job.URL = found.URL
+		}
+		if job.Description == "" {
+			job.Description = found.Description
+		}
+		if job.MatchScore == 0 {
+			job.MatchScore = found.MatchScore
+		}
+	}
+
+	return job
+}
+
+func findJobByID(id string) (models.Job, bool) {
+	jobMu.RLock()
+	defer jobMu.RUnlock()
+
+	for _, job := range jobStore {
+		if job.ID == id {
+			return job, true
+		}
+	}
+
+	return models.Job{}, false
+}
+
+func writeTempJSON(payload interface{}) (string, error) {
+	file, err := os.CreateTemp("", "job-payload-*.json")
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	if err := json.NewEncoder(file).Encode(payload); err != nil {
+		os.Remove(file.Name())
+		return "", err
+	}
+
+	return file.Name(), nil
 }

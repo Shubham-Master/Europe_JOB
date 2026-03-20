@@ -1,16 +1,22 @@
 """
 CV Parser Module - Europe Job Hunter
-Extracts structured skills profile from a PDF CV using Claude AI.
+Extracts structured skills profile from a PDF CV using Gemini.
 """
 
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
-import anthropic
 import pdfplumber
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from ai_tools.gemini_client import generate_json
+
+DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "data" / "profile.json"
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -24,13 +30,11 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     return text.strip()
 
 
-def parse_cv_with_claude(cv_text: str) -> dict:
+def parse_cv_with_gemini(cv_text: str) -> dict:
     """
-    Send CV text to Claude API and extract a structured profile.
+    Send CV text to Gemini API and extract a structured profile.
     Returns a dict with skills, experience, roles, and preferences.
     """
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-
     prompt = f"""You are a CV/resume parser. Analyze the following CV text and extract a structured profile as JSON.
 
 CV TEXT:
@@ -87,21 +91,67 @@ Return ONLY a valid JSON object (no markdown, no explanation) with this exact st
   "open_to_relocation": true or false,
   "visa_required": "unknown | yes | no",
   "top_keywords": ["10-15 most important keywords for job matching"]
-}}"""
+}}
 
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}],
-    )
+Rules:
+- Return JSON only.
+- Use null when a scalar field is unknown.
+- Use [] when an array has no reliable values.
+- Keep work_experience in reverse chronological order when possible.
+- Do not invent companies, dates, or skills that are not supported by the CV text."""
 
-    raw = message.content[0].text.strip()
+    return normalize_profile(generate_json(prompt, max_tokens=2200, temperature=0.1))
 
-    # Strip markdown fences if present
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
 
-    return json.loads(raw)
+def normalize_profile(profile: dict) -> dict:
+    """Fill missing keys so downstream code gets a predictable structure."""
+    contact = profile.get("contact", {}) if isinstance(profile.get("contact"), dict) else {}
+
+    def list_of_strings(value):
+        if not isinstance(value, list):
+            return []
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    def list_of_dicts(value):
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, dict)]
+
+    def normalize_bool(value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {"true", "yes", "y"}
+        return False
+
+    return {
+        "full_name": profile.get("full_name"),
+        "contact": {
+            "email": contact.get("email"),
+            "phone": contact.get("phone"),
+            "location": contact.get("location"),
+            "linkedin": contact.get("linkedin"),
+            "github": contact.get("github"),
+        },
+        "summary": profile.get("summary"),
+        "current_title": profile.get("current_title"),
+        "seniority_level": profile.get("seniority_level", "unknown"),
+        "years_of_experience": profile.get("years_of_experience"),
+        "technical_skills": list_of_strings(profile.get("technical_skills")),
+        "soft_skills": list_of_strings(profile.get("soft_skills")),
+        "programming_languages": list_of_strings(profile.get("programming_languages")),
+        "frameworks_and_tools": list_of_strings(profile.get("frameworks_and_tools")),
+        "domains": list_of_strings(profile.get("domains")),
+        "industries": list_of_strings(profile.get("industries")),
+        "education": list_of_dicts(profile.get("education")),
+        "languages": list_of_dicts(profile.get("languages")),
+        "work_experience": list_of_dicts(profile.get("work_experience")),
+        "target_roles": list_of_strings(profile.get("target_roles")),
+        "preferred_locations": list_of_strings(profile.get("preferred_locations")),
+        "open_to_relocation": normalize_bool(profile.get("open_to_relocation", False)),
+        "visa_required": profile.get("visa_required", "unknown"),
+        "top_keywords": list_of_strings(profile.get("top_keywords")),
+    }
 
 
 def save_profile(profile: dict, output_path: str) -> None:
@@ -112,7 +162,7 @@ def save_profile(profile: dict, output_path: str) -> None:
     print(f"✅ Profile saved to: {output_path}")
 
 
-def parse_cv(pdf_path: str, output_path: str = "data/profile.json") -> dict:
+def parse_cv(pdf_path: str, output_path: str = str(DEFAULT_OUTPUT_PATH)) -> dict:
     """
     Main function: parse a CV PDF and return + save the structured profile.
 
@@ -130,9 +180,9 @@ def parse_cv(pdf_path: str, output_path: str = "data/profile.json") -> dict:
         raise ValueError("Could not extract any text from the PDF. Is it a scanned image?")
 
     print(f"📝 Extracted {len(cv_text)} characters of text")
-    print("🤖 Sending to Claude for parsing...")
+    print("🤖 Sending to Gemini for parsing...")
 
-    profile = parse_cv_with_claude(cv_text)
+    profile = parse_cv_with_gemini(cv_text)
 
     save_profile(profile, output_path)
 
@@ -155,15 +205,15 @@ if __name__ == "__main__":
         sys.exit(1)
 
     pdf_file = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) > 2 else "data/profile.json"
+    output_file = sys.argv[2] if len(sys.argv) > 2 else str(DEFAULT_OUTPUT_PATH)
 
     if not os.path.exists(pdf_file):
         print(f"❌ File not found: {pdf_file}")
         sys.exit(1)
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("❌ ANTHROPIC_API_KEY environment variable not set.")
-        print("   Get your key at: https://console.anthropic.com/")
+    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
+        print("❌ GEMINI_API_KEY environment variable not set.")
+        print("   Get one at: https://aistudio.google.com/")
         sys.exit(1)
 
     parse_cv(pdf_file, output_file)

@@ -1,18 +1,18 @@
 services:
   - type: web
     name: europe-job-api
-    runtime: go
-    rootDir: api
+    runtime: docker
     plan: free
-    buildCommand: go build -o server ./cmd/server
-    startCommand: ./server
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: PORT
         value: 8080
       - key: ENV
         value: production
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
       - key: ADZUNA_APP_ID
         sync: false
       - key: ADZUNA_APP_KEY

@@ -5,12 +5,18 @@ No API key required!
 """
 
 import hashlib
+import sys
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import quote
 
 import requests
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 # RSS feed templates per source
 RSS_SOURCES = {

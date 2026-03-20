@@ -1,6 +1,6 @@
 """
 Cover Letter Generator — Europe Job Hunter
-Generates personalized cover letters and tailored CV bullets using Claude AI.
+Generates personalized cover letters and tailored CV bullets using Gemini.
 
 User Preferences:
 - Length  : ~200 words
@@ -10,26 +10,25 @@ User Preferences:
 
 import json
 import os
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
-import anthropic
-from dotenv import load_dotenv
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-load_dotenv()
+from ai_tools.gemini_client import generate_json, generate_text
 
 
-def call_claude(prompt: str, max_tokens: int = 1500) -> str:
-    """Call Claude API and return text response."""
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return message.content[0].text.strip()
+DEFAULT_JOBS_PATH = PROJECT_ROOT / "data" / "jobs_matched.json"
+DEFAULT_PROFILE_PATH = PROJECT_ROOT / "data" / "profile.json"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data" / "applications"
+
+
+def call_gemini(prompt: str, max_tokens: int = 1500, temperature: float = 0.35) -> str:
+    """Call Gemini API and return text response."""
+    return generate_text(prompt, max_tokens=max_tokens, temperature=temperature)
 
 
 def generate_cover_letter(job: dict, profile: dict) -> str:
@@ -70,7 +69,7 @@ STRICT INSTRUCTIONS:
 
 Write the cover letter now:"""
 
-    return call_claude(prompt, max_tokens=600)
+    return call_gemini(prompt, max_tokens=600, temperature=0.5)
 
 
 def tailor_cv_bullets(job: dict, profile: dict) -> dict:
@@ -104,17 +103,24 @@ Return ONLY valid JSON (no markdown) with this structure:
   "ats_score_estimate": 75
 }}"""
 
-    raw = call_claude(prompt, max_tokens=800)
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
+        raw = generate_json(prompt, max_tokens=800, temperature=0.2)
+        return normalize_tailoring_result(raw)
+    except (json.JSONDecodeError, ValueError):
         return {"tailored_bullets": [], "missing_skills": [], "keywords_to_add": [], "ats_score_estimate": 0}
 
 
-def generate_application(job: dict, profile: dict, output_dir: str = "data/applications") -> dict:
+def normalize_tailoring_result(data: dict) -> dict:
+    """Keep the response shape stable for the UI and API."""
+    return {
+        "tailored_bullets": [str(item).strip() for item in data.get("tailored_bullets", []) if str(item).strip()][:5],
+        "missing_skills": [str(item).strip() for item in data.get("missing_skills", []) if str(item).strip()],
+        "keywords_to_add": [str(item).strip() for item in data.get("keywords_to_add", []) if str(item).strip()],
+        "ats_score_estimate": int(data.get("ats_score_estimate", 0) or 0),
+    }
+
+
+def generate_application(job: dict, profile: dict, output_dir: str | None = str(DEFAULT_OUTPUT_DIR)) -> dict:
     """Generate full application package: cover letter + tailored CV bullets."""
 
     company = job.get("company", "unknown").replace(" ", "_").lower()
@@ -147,14 +153,18 @@ def generate_application(job: dict, profile: dict, output_dir: str = "data/appli
         "generated_at":       datetime.utcnow().isoformat(),
     }
 
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    if output_dir is None:
+        return package
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     # Save JSON
-    with open(f"{output_dir}/{slug}.json", "w", encoding="utf-8") as f:
+    with open(output_path / f"{slug}.json", "w", encoding="utf-8") as f:
         json.dump(package, f, indent=2, ensure_ascii=False)
 
     # Save cover letter as plain text
-    with open(f"{output_dir}/{slug}_cover_letter.txt", "w", encoding="utf-8") as f:
+    with open(output_path / f"{slug}_cover_letter.txt", "w", encoding="utf-8") as f:
         f.write(f"Position : {job.get('title')} at {job.get('company')}\n")
         f.write(f"Location : {job.get('location')}\n")
         f.write(f"URL      : {job.get('url')}\n")
@@ -162,13 +172,13 @@ def generate_application(job: dict, profile: dict, output_dir: str = "data/appli
         f.write("\n" + "="*60 + "\n\n")
         f.write(cover_letter)
 
-    print(f"   ✅ Saved: data/applications/{slug}_cover_letter.txt")
+    print(f"   ✅ Saved: {output_path / f'{slug}_cover_letter.txt'}")
     return package
 
 
 def process_top_jobs(
-    jobs_path:    str   = "data/jobs_matched.json",
-    profile_path: str   = "data/profile.json",
+    jobs_path:    str   = str(DEFAULT_JOBS_PATH),
+    profile_path: str   = str(DEFAULT_PROFILE_PATH),
     top_n:        int   = 5,
     min_score:    float = 55.0,
 ):
@@ -209,9 +219,37 @@ def process_top_jobs(
             print(f"     ⚠️  Missing skills: {', '.join(r['missing_skills'][:3])}")
 
 
+def process_single_job(job_path: str, profile_path: str, output_path: str) -> dict:
+    """Generate a single application package and save it as JSON."""
+    for path in [job_path, profile_path]:
+        if not os.path.exists(path):
+            print(f"❌ File not found: {path}")
+            sys.exit(1)
+
+    with open(job_path, encoding="utf-8") as f:
+        job = json.load(f)
+    with open(profile_path, encoding="utf-8") as f:
+        profile = json.load(f)
+
+    package = generate_application(job, profile, output_dir=None)
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(package, f, indent=2, ensure_ascii=False)
+
+    print(f"✅ Saved API result to: {output_path}")
+    return package
+
+
 if __name__ == "__main__":
-    jobs_path    = sys.argv[1] if len(sys.argv) > 1 else "data/jobs_matched.json"
-    profile_path = sys.argv[2] if len(sys.argv) > 2 else "data/profile.json"
+    if len(sys.argv) > 1 and sys.argv[1] == "--single":
+        if len(sys.argv) < 5:
+            print("Usage: python ai_tools/cover_letter.py --single <job.json> <profile.json> <output.json>")
+            sys.exit(1)
+        process_single_job(sys.argv[2], sys.argv[3], sys.argv[4])
+        sys.exit(0)
+
+    jobs_path    = sys.argv[1] if len(sys.argv) > 1 else str(DEFAULT_JOBS_PATH)
+    profile_path = sys.argv[2] if len(sys.argv) > 2 else str(DEFAULT_PROFILE_PATH)
     top_n        = int(sys.argv[3])   if len(sys.argv) > 3 else 5
     min_score    = float(sys.argv[4]) if len(sys.argv) > 4 else 55.0
 

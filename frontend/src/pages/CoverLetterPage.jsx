@@ -19,31 +19,31 @@ export default function CoverLetterPage({ job }) {
   const [missing, setMissing]           = useState([])
   const [loading, setLoading]           = useState(false)
   const [generated, setGenerated]       = useState(!job)
+  const [error, setError]               = useState('')
   const [copied, setCopied]             = useState(false)
   const [activeTab, setActiveTab]       = useState('letter')
 
   const generate = async () => {
     if (!job) return
     setLoading(true)
+    setError('')
     try {
       const res = await axios.post('/api/v1/cover-letter', {
         job_id: job.id,
+        job_title: job.title,
+        company: job.company,
+        location: job.location,
+        job_url: job.url,
         job_description: job.description || '',
+        match_score: job.match_score || 0,
       })
       setCoverLetter(res.data.data?.cover_letter || MOCK_COVER_LETTER)
       setBullets(res.data.data?.tailored_bullets || [])
       setMissing(res.data.data?.missing_skills || [])
       setGenerated(true)
-    } catch {
-      // Use mock for demo
-      setCoverLetter(MOCK_COVER_LETTER)
-      setBullets([
-        '• Led backend API development using Python/FastAPI, reducing response time by 40%',
-        '• Designed microservices architecture serving 50K+ daily active users',
-        '• Implemented CI/CD pipelines using Docker and GitHub Actions',
-      ])
-      setMissing(['Kafka', 'Kubernetes'])
-      setGenerated(true)
+    } catch (err) {
+      setGenerated(false)
+      setError(err.response?.data?.error || 'Could not generate the cover letter. Please upload your CV and check the API key.')
     }
     setLoading(false)
   }
@@ -101,6 +101,8 @@ export default function CoverLetterPage({ job }) {
           <p>Go to the Jobs tab, find a match, and click "Generate Cover Letter"</p>
         </div>
       )}
+
+      {error && <div className="page-error">{error}</div>}
 
       {generated && (
         <>

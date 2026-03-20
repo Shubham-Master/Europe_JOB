@@ -14,7 +14,7 @@ type Job struct {
 	Salary      string    `json:"salary,omitempty"`
 	Source      string    `json:"source"` // adzuna, indeed, rss, etc.
 	MatchScore  float64   `json:"match_score"`
-	ScrapedAt   time.Time `json:"scraped_at"`
+	ScrapedAt   string    `json:"scraped_at"`
 	Seen        bool      `json:"seen"`
 }
 
@@ -40,27 +40,33 @@ type Language struct {
 
 // CoverLetterRequest is the input for cover letter generation
 type CoverLetterRequest struct {
-	JobID   string `json:"job_id" binding:"required"`
-	JobURL  string `json:"job_url"`
-	JobDesc string `json:"job_description"`
+	JobID       string  `json:"job_id" binding:"required"`
+	JobTitle    string  `json:"job_title"`
+	Company     string  `json:"company"`
+	Location    string  `json:"location"`
+	JobURL      string  `json:"job_url"`
+	JobDesc     string  `json:"job_description"`
+	MatchScore  float64 `json:"match_score"`
 }
 
 // CoverLetterResponse is the output from cover letter generation
 type CoverLetterResponse struct {
-	JobTitle     string `json:"job_title"`
-	Company      string `json:"company"`
-	CoverLetter  string `json:"cover_letter"`
-	TailoredCV   string `json:"tailored_cv_bullets"`
-	MatchScore   float64 `json:"match_score"`
-	MissingSkills []string `json:"missing_skills"`
+	JobTitle        string   `json:"job_title"`
+	Company         string   `json:"company"`
+	CoverLetter     string   `json:"cover_letter"`
+	TailoredBullets []string `json:"tailored_bullets"`
+	MatchScore      float64  `json:"match_score"`
+	MissingSkills   []string `json:"missing_skills"`
 }
 
 // PipelineStatus tracks the current run
 type PipelineStatus struct {
 	Status      string    `json:"status"` // idle, running, done, error
+	CurrentStep string    `json:"current_step"`
 	LastRun     time.Time `json:"last_run"`
 	JobsFound   int       `json:"jobs_found"`
 	JobsMatched int       `json:"jobs_matched"`
+	TopScore    float64   `json:"top_score"`
 	Message     string    `json:"message"`
 }
 

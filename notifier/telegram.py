@@ -12,11 +12,16 @@ import json
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_JOBS_PATH = PROJECT_ROOT / "data" / "jobs_matched.json"
+DEFAULT_PROFILE_PATH = PROJECT_ROOT / "data" / "profile.json"
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 # ─── Telegram API ─────────────────────────────────────────────────────────────
@@ -128,8 +133,8 @@ def format_daily_digest(jobs: list[dict], profile_name: str = "You") -> list[str
 # ─── Main Notifier ────────────────────────────────────────────────────────────
 
 def send_daily_digest(
-    jobs_path:    str = "data/jobs_matched.json",
-    profile_path: str = "data/profile.json",
+    jobs_path:    str = str(DEFAULT_JOBS_PATH),
+    profile_path: str = str(DEFAULT_PROFILE_PATH),
     top_n:        int = 10,
     min_score:    float = 55.0,
 ) -> bool:
@@ -150,8 +155,8 @@ def send_daily_digest(
             print(f"❌ File not found: {path}")
             return False
 
-    with open(jobs_path)    as f: jobs    = json.load(f)
-    with open(profile_path) as f: profile = json.load(f)
+    with open(jobs_path, encoding="utf-8")    as f: jobs    = json.load(f)
+    with open(profile_path, encoding="utf-8") as f: profile = json.load(f)
 
     profile_name = profile.get("full_name", "there")
 
@@ -208,8 +213,8 @@ if __name__ == "__main__":
             print("❌ Check your TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env")
 
     elif cmd == "digest":
-        jobs_path    = sys.argv[2] if len(sys.argv) > 2 else "data/jobs_matched.json"
-        profile_path = sys.argv[3] if len(sys.argv) > 3 else "data/profile.json"
+        jobs_path    = sys.argv[2] if len(sys.argv) > 2 else str(DEFAULT_JOBS_PATH)
+        profile_path = sys.argv[3] if len(sys.argv) > 3 else str(DEFAULT_PROFILE_PATH)
         send_daily_digest(jobs_path, profile_path)
 
     else:

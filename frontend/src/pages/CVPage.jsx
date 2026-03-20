@@ -20,6 +20,7 @@ export default function CVPage() {
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [uploaded, setUploaded] = useState(false)
+  const [error, setError]       = useState('')
   const fileRef = useRef()
 
   const handleFile = async (file) => {
@@ -29,6 +30,7 @@ export default function CVPage() {
     }
 
     setUploading(true)
+    setError('')
     const form = new FormData()
     form.append('cv', file)
 
@@ -40,9 +42,9 @@ export default function CVPage() {
       // Fetch updated profile
       const profileRes = await axios.get('/api/v1/cv/profile')
       if (profileRes.data.data) setProfile(profileRes.data.data)
-    } catch {
-      // Demo mode
-      setUploaded(true)
+    } catch (err) {
+      setUploaded(false)
+      setError(err.response?.data?.error || 'Could not parse the CV. Check your Gemini API key and try again.')
     }
     setUploading(false)
   }
@@ -79,12 +81,14 @@ export default function CVPage() {
         />
         <div className="upload-icon">{uploading ? '⏳' : uploaded ? '✅' : '📄'}</div>
         <div className="upload-text">
-          {uploading ? 'Parsing CV with Claude AI...' :
+          {uploading ? 'Parsing CV with Gemini...' :
            uploaded  ? 'CV uploaded & parsed!' :
            'Drop your CV here or click to upload'}
         </div>
-        <div className="upload-sub">PDF only · Claude AI will extract your skills profile</div>
+        <div className="upload-sub">PDF only · Gemini will extract your skills profile</div>
       </div>
+
+      {error && <div className="page-error">{error}</div>}
 
       {/* Profile Preview */}
       {profile && (

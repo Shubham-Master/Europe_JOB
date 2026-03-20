@@ -1,5 +1,14 @@
 .pipeline-page { display: flex; flex-direction: column; gap: 24px; }
 
+.page-error {
+  background: rgba(255, 71, 71, 0.08);
+  border: 1px solid rgba(255, 71, 71, 0.22);
+  color: #ff9f9f;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+}
+
 .btn-run {
   background: var(--accent);
   color: #0a0a0a;
@@ -35,6 +44,19 @@
   font-size: 12px;
   font-weight: 600;
 }
+.schedule-badge.running { background: rgba(232, 255, 71, 0.1); color: var(--accent); border-color: rgba(232, 255, 71, 0.2); }
+.schedule-badge.error { background: rgba(255, 71, 71, 0.1); color: var(--danger); border-color: rgba(255, 71, 71, 0.2); }
+.schedule-badge.idle { background: var(--bg3); color: var(--text3); border-color: var(--border); }
+
+.status-banner {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.status-title { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; font-family: var(--mono); }
+.status-text { font-size: 14px; color: var(--text); }
 
 /* Steps */
 .steps { display: flex; flex-direction: column; gap: 0; }
@@ -54,6 +76,7 @@
 
 .step.running { border-color: var(--accent); background: rgba(232, 255, 71, 0.03); }
 .step.done { border-color: rgba(71, 255, 138, 0.2); }
+.step.failed { border-color: rgba(255, 71, 71, 0.2); background: rgba(255, 71, 71, 0.04); }
 .step.pending { opacity: 0.5; }
 
 .step-icon { font-size: 22px; width: 32px; text-align: center; }
@@ -64,6 +87,7 @@
 
 .badge-done    { background: rgba(71, 255, 138, 0.1); color: var(--green);  border: 1px solid rgba(71, 255, 138, 0.2); padding: 3px 10px; border-radius: 20px; font-size: 12px; }
 .badge-running { background: rgba(232, 255, 71, 0.1);  color: var(--accent); border: 1px solid rgba(232, 255, 71, 0.2); padding: 3px 10px; border-radius: 20px; font-size: 12px; }
+.badge-error   { background: rgba(255, 71, 71, 0.1); color: var(--danger); border: 1px solid rgba(255, 71, 71, 0.2); padding: 3px 10px; border-radius: 20px; font-size: 12px; }
 .badge-pending { background: var(--bg3); color: var(--text3); border: 1px solid var(--border); padding: 3px 10px; border-radius: 20px; font-size: 12px; }
 
 /* Result */

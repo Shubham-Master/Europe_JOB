@@ -10,7 +10,8 @@ import (
 type Config struct {
 	Port           string
 	Env            string
-	AnthropicKey   string
+	GeminiKey      string
+	GeminiModel    string
 	AdzunaAppID    string
 	AdzunaAppKey   string
 	SupabaseURL    string
@@ -28,7 +29,8 @@ func Load() *Config {
 	return &Config{
 		Port:           getEnv("PORT", "8080"),
 		Env:            getEnv("ENV", "development"),
-		AnthropicKey:   getEnv("ANTHROPIC_API_KEY", ""),
+		GeminiKey:      getEnv("GEMINI_API_KEY", getEnv("GOOGLE_API_KEY", "")),
+		GeminiModel:    getEnv("GEMINI_MODEL", "gemini-2.5-flash-lite"),
 		AdzunaAppID:    getEnv("ADZUNA_APP_ID", ""),
 		AdzunaAppKey:   getEnv("ADZUNA_APP_KEY", ""),
 		SupabaseURL:    getEnv("SUPABASE_URL", ""),

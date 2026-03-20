@@ -15,6 +15,12 @@ import os
 import re
 import sys
 from datetime import datetime
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_PROFILE_PATH = PROJECT_ROOT / "data" / "profile.json"
+DEFAULT_RAW_JOBS_PATH = PROJECT_ROOT / "data" / "jobs_raw.json"
+DEFAULT_MATCHED_JOBS_PATH = PROJECT_ROOT / "data" / "jobs_matched.json"
 
 
 # ─── Scoring Weights ──────────────────────────────────────────────────────────
@@ -258,9 +264,9 @@ def match_jobs(
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    profile_path = sys.argv[1] if len(sys.argv) > 1 else "data/profile.json"
-    jobs_path    = sys.argv[2] if len(sys.argv) > 2 else "data/jobs_raw.json"
-    output_path  = sys.argv[3] if len(sys.argv) > 3 else "data/jobs_matched.json"
+    profile_path = sys.argv[1] if len(sys.argv) > 1 else str(DEFAULT_PROFILE_PATH)
+    jobs_path    = sys.argv[2] if len(sys.argv) > 2 else str(DEFAULT_RAW_JOBS_PATH)
+    output_path  = sys.argv[3] if len(sys.argv) > 3 else str(DEFAULT_MATCHED_JOBS_PATH)
     min_score    = float(sys.argv[4]) if len(sys.argv) > 4 else 0.0
 
     for path in [profile_path, jobs_path]:
@@ -268,16 +274,16 @@ if __name__ == "__main__":
             print(f"❌ File not found: {path}")
             sys.exit(1)
 
-    with open(profile_path) as f:
+    with open(profile_path, encoding="utf-8") as f:
         profile = json.load(f)
 
-    with open(jobs_path) as f:
+    with open(jobs_path, encoding="utf-8") as f:
         jobs = json.load(f)
 
     matched = match_jobs(jobs, profile, min_score=min_score)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(matched, f, indent=2, ensure_ascii=False)
 
     print(f"\n💾 Saved {len(matched)} matched jobs to: {output_path}")
