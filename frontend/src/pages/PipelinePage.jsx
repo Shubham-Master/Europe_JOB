@@ -62,6 +62,26 @@ export default function PipelinePage() {
     }
   }
 
+  const stopPipeline = async () => {
+    setError('')
+    try {
+      await api.post('/api/v1/pipeline/stop')
+      fetchStatus()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not stop the pipeline.')
+    }
+  }
+
+  const restartPipeline = async () => {
+    setError('')
+    try {
+      await api.post('/api/v1/pipeline/restart')
+      fetchStatus()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not restart the pipeline.')
+    }
+  }
+
   const step = getStepIndex(pipeline.current_step)
   const hasRealLastRun = Boolean(
     pipeline.last_run &&
@@ -79,13 +99,23 @@ export default function PipelinePage() {
           <h1 className="page-title">Pipeline</h1>
           <p className="page-sub">Run the full scrape → match → notify flow against your uploaded CV</p>
         </div>
-        <button
-          className="btn-run"
-          onClick={runPipeline}
-          disabled={pipeline.status === 'running'}
-        >
-          {pipeline.status === 'running' ? '⏳ Running...' : '▶ Run Pipeline'}
-        </button>
+        <div className="pipeline-actions">
+          <button
+            className="btn-run"
+            onClick={runPipeline}
+            disabled={pipeline.status === 'running'}
+          >
+            {pipeline.status === 'running' ? '⏳ Running...' : '▶ Run Pipeline'}
+          </button>
+          {pipeline.status === 'running' && (
+            <button className="btn-stop" onClick={stopPipeline}>
+              ⏹ Stop
+            </button>
+          )}
+          <button className="btn-secondary" onClick={restartPipeline}>
+            ↻ Restart
+          </button>
+        </div>
       </div>
 
       <div className="schedule-card">

@@ -157,7 +157,7 @@ def scrape_rss_for_profile(profile: dict, locations: list[str] = None) -> list[d
         List of scraped jobs
     """
     if locations is None:
-        locations = ["Germany", "Netherlands", "France", "Ireland"]
+        locations = ["Netherlands", "Germany", "Belgium"]
 
     from scraper.adzuna import build_keywords
     keywords = build_keywords(profile)
@@ -168,7 +168,7 @@ def scrape_rss_for_profile(profile: dict, locations: list[str] = None) -> list[d
     all_jobs = []
     seen_ids = set()
 
-    for keyword in keywords[:3]:  # Limit to 3 keywords for RSS
+    for keyword in keywords[:2]:  # Keep RSS fast enough for manual pipeline runs
         for location in locations[:3]:  # Limit to 3 locations
             jobs = fetch_indeed_rss(keyword, location)
 

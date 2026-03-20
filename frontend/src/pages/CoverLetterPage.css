@@ -166,6 +166,26 @@
 .bullets-info { color: var(--text2); font-size: 13px; }
 .bullets-list { display: flex; flex-direction: column; gap: 8px; }
 
+.draft-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.draft-signal {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(0, 208, 189, 0.08);
+  border: 1px solid rgba(0, 208, 189, 0.18);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.draft-signal.warning {
+  background: rgba(255, 196, 87, 0.08);
+  border-color: rgba(255, 196, 87, 0.18);
+}
+
 .bullet-item {
   display: flex;
   align-items: center;
@@ -209,4 +229,15 @@
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .action-row {
+    flex-wrap: wrap;
+  }
+
+  .bullet-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }

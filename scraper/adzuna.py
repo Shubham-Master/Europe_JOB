@@ -131,7 +131,7 @@ def parse_adzuna_job(raw: dict, country_code: str) -> dict:
     }
 
 
-def scrape_for_profile(profile: dict, countries: list[str] = None, pages_per_search: int = 2) -> list[dict]:
+def scrape_for_profile(profile: dict, countries: list[str] = None, pages_per_search: int = 1) -> list[dict]:
     """
     Main function: scrape jobs based on a parsed CV profile.
 
@@ -144,7 +144,7 @@ def scrape_for_profile(profile: dict, countries: list[str] = None, pages_per_sea
         List of all scraped jobs (deduplicated)
     """
     if countries is None:
-        countries = ["de", "nl", "gb", "fr", "be"]
+        countries = ["nl", "de", "be", "ch"]
 
     # Build search keywords from profile
     keywords = build_keywords(profile)
@@ -154,7 +154,7 @@ def scrape_for_profile(profile: dict, countries: list[str] = None, pages_per_sea
     all_jobs = []
     seen_ids = set()
 
-    for keyword in keywords:
+    for keyword in keywords[:3]:
         for country in countries:
             print(f"\n[{keyword}] → {EUROPEAN_COUNTRIES[country]}")
             jobs = fetch_jobs_by_keyword(keyword, country, pages=pages_per_search)

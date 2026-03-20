@@ -60,6 +60,8 @@ func main() {
 		pipeline := v1.Group("/pipeline")
 		{
 			pipeline.POST("/run", h.RunPipeline)        // POST /api/v1/pipeline/run
+			pipeline.POST("/stop", h.StopPipeline)       // POST /api/v1/pipeline/stop
+			pipeline.POST("/restart", h.RestartPipeline) // POST /api/v1/pipeline/restart
 			pipeline.GET("/status", h.GetPipelineStatus) // GET  /api/v1/pipeline/status
 		}
 	}

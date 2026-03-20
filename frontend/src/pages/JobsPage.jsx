@@ -8,6 +8,10 @@ function ScoreBadge({ score }) {
   return <span className={`score-badge ${cls}`}>{label} {score}%</span>
 }
 
+function isLikelyGeoLocked(job) {
+  return job?.source === 'adzuna'
+}
+
 export default function JobsPage({ onJobSelect, onSceneChange }) {
   const [jobs, setJobs]       = useState([])
   const [country, setCountry] = useState('All')
@@ -53,6 +57,13 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
     markSeen(job.id)
     updateSeenLocally(job.id)
     window.open(job.url, '_blank', 'noopener,noreferrer')
+  }
+
+  const searchCompanyCareers = (job) => {
+    markSeen(job.id)
+    updateSeenLocally(job.id)
+    const query = encodeURIComponent(`${job.company} ${job.title} careers ${job.country || ''}`.trim())
+    window.open(`https://www.google.com/search?q=${query}`, '_blank', 'noopener,noreferrer')
   }
 
   const selectJob = (job) => {
@@ -162,11 +173,21 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
                 <ScoreBadge score={job.match_score} />
               </div>
               {job.salary && <div className="job-salary">💰 {job.salary}</div>}
+              {isLikelyGeoLocked(job) && (
+                <div className="job-warning">
+                  This Adzuna detail page may be geo-restricted. If it blocks you, use the company-careers search fallback.
+                </div>
+              )}
             </div>
             <div className="job-actions">
               <button className="btn-ghost" onClick={() => openJob(job)}>
                 View Job ↗
               </button>
+              {isLikelyGeoLocked(job) && (
+                <button className="btn-ghost" onClick={() => searchCompanyCareers(job)}>
+                  Search Company Careers
+                </button>
+              )}
               <button className="btn-primary" onClick={() => selectJob(job)}>
                 ✍️ Generate Cover Letter
               </button>
