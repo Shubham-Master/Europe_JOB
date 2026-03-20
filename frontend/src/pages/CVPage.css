@@ -9,6 +9,26 @@
   font-size: 13.5px;
 }
 
+.empty-card,
+.history-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.empty-copy {
+  color: var(--text2);
+  max-width: 680px;
+  line-height: 1.6;
+}
+
 .upload-zone {
   border: 2px dashed var(--border2);
   border-radius: 12px;
@@ -73,6 +93,63 @@
 .profile-exp { font-size: 12.5px; color: var(--text3); }
 
 .profile-sections { display: flex; flex-direction: column; gap: 16px; }
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.history-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.history-sub {
+  color: var(--text2);
+  font-size: 13px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-item {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-item:hover {
+  border-color: var(--border2);
+}
+
+.history-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.history-meta {
+  color: var(--text3);
+  font-size: 12.5px;
+}
+
+.history-tip {
+  margin-top: 16px;
+  color: var(--text2);
+  font-size: 13px;
+  line-height: 1.6;
+}
 
 .profile-section {}
 .section-title { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-family: var(--mono); }

@@ -1,27 +1,45 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import api from '../lib/api'
+import { getCoverLetterHistory, getLatestCoverLetter, saveCoverLetterResult } from '../lib/storage'
 import './CoverLetterPage.css'
 
-const MOCK_COVER_LETTER = `Dear Hiring Team at Zalando,
-
-Zalando's engineering culture — particularly your commitment to microservices at scale and developer autonomy — is exactly the environment where I thrive. As someone who has built and maintained distributed backend systems, I'm genuinely excited about the Senior Backend Engineer role.
-
-Over the past 4 years, I've led backend development using Python and Go, delivering APIs that handle 50K+ requests/minute with 99.9% uptime. At my current role, I reduced system latency by 40% through query optimization and caching strategies — the kind of impact I'm eager to replicate at Zalando's scale.
-
-I'm fully open to relocating to Berlin and am available to start within 4 weeks. I'd love the opportunity to discuss how my experience aligns with your team's goals.
-
-Best regards,
-Shubham`
-
 export default function CoverLetterPage({ job }) {
-  const [coverLetter, setCoverLetter]   = useState(job ? '' : MOCK_COVER_LETTER)
-  const [bullets, setBullets]           = useState([])
-  const [missing, setMissing]           = useState([])
+  const [result, setResult]             = useState(null)
+  const [history, setHistory]           = useState(() => getCoverLetterHistory())
   const [loading, setLoading]           = useState(false)
-  const [generated, setGenerated]       = useState(!job)
   const [error, setError]               = useState('')
   const [copied, setCopied]             = useState(false)
   const [activeTab, setActiveTab]       = useState('letter')
+
+  useEffect(() => {
+    const items = getCoverLetterHistory()
+    setHistory(items)
+
+    if (job?.id) {
+      setResult(getLatestCoverLetter(job.id))
+      return
+    }
+
+    setResult(items[0] || null)
+  }, [job])
+
+  const hydrateResult = (payload) => {
+    const safeJob = payload?.job || (job ? {
+      id: job.id,
+      title: job.title,
+      company: job.company,
+      location: job.location,
+      url: job.url,
+      match_score: job.match_score || 0,
+    } : null)
+
+    return {
+      ...payload,
+      job: safeJob,
+      tailored_bullets: Array.isArray(payload?.tailored_bullets) ? payload.tailored_bullets : [],
+      missing_skills: Array.isArray(payload?.missing_skills) ? payload.missing_skills : [],
+    }
+  }
 
   const generate = async () => {
     if (!job) return
@@ -37,32 +55,38 @@ export default function CoverLetterPage({ job }) {
         job_description: job.description || '',
         match_score: job.match_score || 0,
       })
-      setCoverLetter(res.data.data?.cover_letter || MOCK_COVER_LETTER)
-      setBullets(res.data.data?.tailored_bullets || [])
-      setMissing(res.data.data?.missing_skills || [])
-      setGenerated(true)
+      const next = hydrateResult(res.data.data || {})
+      setResult(next)
+      setHistory(saveCoverLetterResult(next))
+      setActiveTab('letter')
     } catch (err) {
-      setGenerated(false)
       setError(err.response?.data?.error || 'Could not generate the cover letter. Please upload your CV and check the API key.')
     }
     setLoading(false)
   }
 
   const copy = () => {
-    navigator.clipboard.writeText(coverLetter)
+    if (!result?.cover_letter) return
+    navigator.clipboard.writeText(result.cover_letter)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   const download = () => {
-    const blob = new Blob([coverLetter], { type: 'text/plain' })
+    if (!result?.cover_letter) return
+    const blob = new Blob([result.cover_letter], { type: 'text/plain' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
     a.href     = url
-    a.download = `cover_letter_${job?.company || 'job'}.txt`
+    a.download = `cover_letter_${result?.job?.company || job?.company || 'job'}.txt`
     a.click()
     URL.revokeObjectURL(url)
   }
+
+  const generated = Boolean(result?.cover_letter)
+  const activeJob = job || result?.job
+  const bullets = result?.tailored_bullets || []
+  const missing = result?.missing_skills || []
 
   return (
     <div className="cl-page">
@@ -71,7 +95,7 @@ export default function CoverLetterPage({ job }) {
         <div>
           <h1 className="page-title">Cover Letter</h1>
           <p className="page-sub">
-            {job ? `${job.title} @ ${job.company} · ${job.match_score}% match` : 'Select a job from Jobs tab'}
+            {activeJob ? `${activeJob.title} @ ${activeJob.company} · ${activeJob.match_score || 0}% match` : 'Select a job from Jobs tab'}
           </p>
         </div>
         {job && !generated && (
@@ -81,9 +105,11 @@ export default function CoverLetterPage({ job }) {
         )}
         {generated && (
           <div className="action-row">
-            <button className="btn-ghost-sm" onClick={generate} disabled={loading}>
-              🔄 Regenerate
-            </button>
+            {job && (
+              <button className="btn-ghost-sm" onClick={generate} disabled={loading}>
+                🔄 Regenerate
+              </button>
+            )}
             <button className="btn-ghost-sm" onClick={copy}>
               {copied ? '✅ Copied!' : '📋 Copy'}
             </button>
@@ -103,6 +129,28 @@ export default function CoverLetterPage({ job }) {
       )}
 
       {error && <div className="page-error">{error}</div>}
+
+      {!generated && history.length > 0 && (
+        <div className="history-panel">
+          <div className="history-panel-title">Recent Cover Letters</div>
+          <div className="history-panel-sub">Open a previous result without regenerating it.</div>
+          <div className="history-panel-list">
+            {history.map((item, index) => (
+              <button
+                key={`${item?.job?.id || 'manual'}-${item?.saved_at || index}`}
+                className="history-entry"
+                onClick={() => {
+                  setResult(item)
+                  setActiveTab('letter')
+                }}
+              >
+                <span className="history-entry-title">{item?.job?.title || 'Saved letter'} @ {item?.job?.company || 'Unknown company'}</span>
+                <span className="history-entry-meta">{new Date(item.saved_at || item.generated_at || Date.now()).toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {generated && (
         <>
@@ -130,8 +178,8 @@ export default function CoverLetterPage({ job }) {
               </div>
               <textarea
                 className="cover-letter-editor"
-                value={coverLetter}
-                onChange={e => setCoverLetter(e.target.value)}
+                value={result?.cover_letter || ''}
+                onChange={e => setResult(current => current ? { ...current, cover_letter: e.target.value } : current)}
                 rows={16}
               />
             </div>
@@ -144,6 +192,9 @@ export default function CoverLetterPage({ job }) {
                 Paste these into your CV for this specific application. They're rewritten to match the job's keywords.
               </p>
               <div className="bullets-list">
+                {bullets.length === 0 && (
+                  <div className="empty-inline">No tailored bullets saved for this result yet.</div>
+                )}
                 {bullets.map((b, i) => (
                   <div key={i} className="bullet-item">
                     <span className="bullet-text">{b}</span>
@@ -162,6 +213,7 @@ export default function CoverLetterPage({ job }) {
                 {missing.map((s, i) => (
                   <span key={i} className="gap-tag">⚠️ {s}</span>
                 ))}
+                {missing.length === 0 && <div className="empty-inline">No major skill gaps were flagged for this saved result.</div>}
               </div>
             </div>
           )}

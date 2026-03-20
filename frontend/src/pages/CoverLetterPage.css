@@ -54,6 +54,56 @@
 .no-job-icon { font-size: 48px; margin-bottom: 16px; }
 .no-job-state h3 { color: var(--text); font-size: 18px; margin-bottom: 8px; }
 
+.history-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.history-panel-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.history-panel-sub {
+  color: var(--text2);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.history-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-entry {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.history-entry:hover {
+  border-color: var(--border2);
+}
+
+.history-entry-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.history-entry-meta {
+  color: var(--text3);
+  font-size: 12.5px;
+}
+
 /* Tabs */
 .tabs {
   display: flex;
@@ -141,6 +191,11 @@
 .gaps-wrap { display: flex; flex-direction: column; gap: 16px; }
 .gaps-info { color: var(--text2); font-size: 13px; }
 .gaps-list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.empty-inline {
+  color: var(--text3);
+  font-size: 13px;
+}
 
 .gap-tag {
   background: rgba(255, 71, 71, 0.08);

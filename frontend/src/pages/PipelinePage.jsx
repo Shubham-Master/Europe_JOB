@@ -63,8 +63,14 @@ export default function PipelinePage() {
   }
 
   const step = getStepIndex(pipeline.current_step)
-  const lastRun = pipeline.last_run ? new Date(pipeline.last_run) : null
+  const hasRealLastRun = Boolean(
+    pipeline.last_run &&
+    typeof pipeline.last_run === 'string' &&
+    !pipeline.last_run.startsWith('0001-01-01')
+  )
+  const lastRun = hasRealLastRun ? new Date(pipeline.last_run) : null
   const isDone = pipeline.status === 'done'
+  const hasRun = pipeline.status !== 'idle' || hasRealLastRun
 
   return (
     <div className="pipeline-page">
@@ -123,7 +129,7 @@ export default function PipelinePage() {
         })}
       </div>
 
-      {(pipeline.jobs_found > 0 || pipeline.jobs_matched > 0 || lastRun) && (
+      {hasRun && (
         <div className="result-card">
           <h3 className="result-title">{pipeline.status === 'error' ? '⚠ Last Run State' : '✅ Last Run Results'}</h3>
           <div className="result-stats">

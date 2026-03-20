@@ -1,19 +1,24 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import JobsPage from './pages/JobsPage.jsx'
 import CoverLetterPage from './pages/CoverLetterPage.jsx'
 import PipelinePage from './pages/PipelinePage.jsx'
 import CVPage from './pages/CVPage.jsx'
+import { loadSelectedJob, saveSelectedJob } from './lib/storage'
 import './App.css'
 
 export default function App() {
   const [page, setPage] = useState('jobs')
-  const [selectedJob, setSelectedJob] = useState(null)
+  const [selectedJob, setSelectedJob] = useState(() => loadSelectedJob())
 
   const handleJobSelect = (job) => {
     setSelectedJob(job)
     setPage('coverletter')
   }
+
+  useEffect(() => {
+    saveSelectedJob(selectedJob)
+  }, [selectedJob])
 
   return (
     <div className="app">

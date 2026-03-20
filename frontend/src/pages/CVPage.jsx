@@ -1,27 +1,38 @@
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import api from '../lib/api'
+import { getCVHistory, saveCVSnapshot } from '../lib/storage'
 import './CVPage.css'
 
-const MOCK_PROFILE = {
-  full_name: 'Shubham Kumar',
-  current_title: 'Software Engineer',
-  seniority_level: 'mid',
-  years_of_experience: 3,
-  technical_skills: ['Python', 'Go', 'REST APIs', 'PostgreSQL', 'Docker', 'Redis'],
-  programming_languages: ['Python', 'Go', 'JavaScript', 'SQL'],
-  frameworks_and_tools: ['FastAPI', 'Gin', 'React', 'Docker', 'GitHub Actions'],
-  domains: ['backend', 'api development', 'cloud'],
-  top_keywords: ['Python', 'Go', 'API', 'Backend', 'Microservices', 'Docker'],
-  target_roles: ['Backend Engineer', 'Software Engineer', 'Python Developer'],
-}
-
 export default function CVPage() {
-  const [profile, setProfile]   = useState(MOCK_PROFILE)
+  const [profile, setProfile]   = useState(null)
+  const [history, setHistory]   = useState(() => getCVHistory())
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [uploaded, setUploaded] = useState(false)
+  const [loadingProfile, setLoadingProfile] = useState(true)
   const [error, setError]       = useState('')
   const fileRef = useRef()
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setLoadingProfile(true)
+      try {
+        const res = await api.get('/api/v1/cv/profile')
+        if (res.data.data) {
+          setProfile(res.data.data)
+          setUploaded(true)
+          setHistory(saveCVSnapshot(res.data.data))
+        }
+      } catch (err) {
+        if (err.response?.status !== 404) {
+          setError(err.response?.data?.error || 'Could not load your saved CV profile.')
+        }
+      }
+      setLoadingProfile(false)
+    }
+
+    fetchProfile()
+  }, [])
 
   const handleFile = async (file) => {
     if (!file || !file.name.endsWith('.pdf')) {
@@ -35,13 +46,16 @@ export default function CVPage() {
     form.append('cv', file)
 
     try {
-      const res = await api.post('/api/v1/cv/parse', form, {
+      await api.post('/api/v1/cv/parse', form, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       setUploaded(true)
       // Fetch updated profile
       const profileRes = await api.get('/api/v1/cv/profile')
-      if (profileRes.data.data) setProfile(profileRes.data.data)
+      if (profileRes.data.data) {
+        setProfile(profileRes.data.data)
+        setHistory(saveCVSnapshot(profileRes.data.data, file.name))
+      }
     } catch (err) {
       setUploaded(false)
       setError(err.response?.data?.error || 'Could not parse the CV. Check your Gemini API key and try again.')
@@ -90,6 +104,15 @@ export default function CVPage() {
 
       {error && <div className="page-error">{error}</div>}
 
+      {!loadingProfile && !profile && (
+        <div className="empty-card">
+          <div className="empty-title">No CV parsed yet</div>
+          <div className="empty-copy">
+            Upload your latest PDF CV to create a real skills profile. Nothing should appear here until a CV is actually parsed.
+          </div>
+        </div>
+      )}
+
       {/* Profile Preview */}
       {profile && (
         <div className="profile-card">
@@ -111,6 +134,34 @@ export default function CVPage() {
             <Section title="🛠️ Frameworks"        items={profile.frameworks_and_tools} color="text2" />
             <Section title="🎯 Target Roles"      items={profile.target_roles} color="green" />
             <Section title="🔑 Top Keywords"      items={profile.top_keywords} color="warn" />
+          </div>
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <div className="history-card">
+          <div className="history-header">
+            <div>
+              <h3 className="history-title">Recent CV Snapshots</h3>
+              <p className="history-sub">Use these to preview older parsed versions in this browser.</p>
+            </div>
+          </div>
+          <div className="history-list">
+            {history.map(item => (
+              <button
+                key={item.id}
+                className="history-item"
+                onClick={() => setProfile(item.profile)}
+              >
+                <span className="history-name">{item.filename || item.profile?.full_name || 'CV snapshot'}</span>
+                <span className="history-meta">
+                  {item.profile?.current_title || 'Untitled profile'} · {new Date(item.saved_at).toLocaleString()}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="history-tip">
+            Need to adapt your CV for a specific role? Select a job and use the tailored bullets in the Cover Letter tab.
           </div>
         </div>
       )}
