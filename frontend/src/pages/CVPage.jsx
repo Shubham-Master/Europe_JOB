@@ -13,25 +13,34 @@ export default function CVPage() {
   const [error, setError]       = useState('')
   const fileRef = useRef()
 
+  const fetchProfile = async () => {
+    const res = await api.get('/api/v1/cv/profile', {
+      validateStatus: (status) => status === 200 || status === 404,
+    })
+
+    if (res.status === 404 || !res.data?.data) {
+      setProfile(null)
+      return null
+    }
+
+    setProfile(res.data.data)
+    setUploaded(true)
+    setHistory(saveCVSnapshot(res.data.data))
+    return res.data.data
+  }
+
   useEffect(() => {
-    const fetchProfile = async () => {
+    const loadProfile = async () => {
       setLoadingProfile(true)
       try {
-        const res = await api.get('/api/v1/cv/profile')
-        if (res.data.data) {
-          setProfile(res.data.data)
-          setUploaded(true)
-          setHistory(saveCVSnapshot(res.data.data))
-        }
+        await fetchProfile()
       } catch (err) {
-        if (err.response?.status !== 404) {
-          setError(err.response?.data?.error || 'Could not load your saved CV profile.')
-        }
+        setError(err.response?.data?.error || 'Could not load your saved CV profile.')
       }
       setLoadingProfile(false)
     }
 
-    fetchProfile()
+    loadProfile()
   }, [])
 
   const handleFile = async (file) => {
@@ -50,11 +59,9 @@ export default function CVPage() {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       setUploaded(true)
-      // Fetch updated profile
-      const profileRes = await api.get('/api/v1/cv/profile')
-      if (profileRes.data.data) {
-        setProfile(profileRes.data.data)
-        setHistory(saveCVSnapshot(profileRes.data.data, file.name))
+      const profileData = await fetchProfile()
+      if (profileData) {
+        setHistory(saveCVSnapshot(profileData, file.name))
       }
     } catch (err) {
       setUploaded(false)

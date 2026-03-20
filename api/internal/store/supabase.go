@@ -178,7 +178,7 @@ func (s *SupabaseStore) GetActiveCVVersion(userID string) (*CVVersion, error) {
 	}
 
 	query := url.Values{}
-	query.Set("select", "id,user_id,filename,profile_json,full_name,current_title,parsed_at")
+	query.Set("select", "id,filename,profile_json,full_name,current_title,parsed_at")
 	if strings.TrimSpace(userID) != "" {
 		query.Set("user_id", "eq."+userID)
 	}

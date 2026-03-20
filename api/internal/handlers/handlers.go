@@ -247,7 +247,7 @@ func (h *Handler) ParseCV(c *gin.Context) {
 	cmd := exec.Command(h.cfg.PythonPath,
 		"../cv_parser/cv_parser.py",
 		tmpPath,
-		profileJSONPath,
+		resolvedPath(profileJSONPath),
 	)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -261,7 +261,7 @@ func (h *Handler) ParseCV(c *gin.Context) {
 		return
 	}
 
-	profileData, err := readJSONFile(profileJSONPath)
+	profileData, err := readJSONFile(resolvedPath(profileJSONPath))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
@@ -902,14 +902,13 @@ func (h *Handler) loadProfileData(userID string) (map[string]interface{}, error)
 	if h.store != nil && h.store.Enabled() {
 		cvVersion, err := h.store.GetActiveCVVersion(userID)
 		if err != nil {
-			return nil, err
-		}
-		if cvVersion != nil {
+			log.Printf("⚠️  Supabase CV profile lookup failed, falling back to disk: %v", err)
+		} else if cvVersion != nil {
 			return cvVersion.ProfileJSON, nil
 		}
 	}
 
-	return readJSONFile(profileJSONPath)
+	return readJSONFile(resolvedPath(profileJSONPath))
 }
 
 func (h *Handler) ensureLocalProfileFile(userID string) (string, func(), error) {
@@ -918,13 +917,15 @@ func (h *Handler) ensureLocalProfileFile(userID string) (string, func(), error) 
 		if err == nil {
 			return path, func() { os.Remove(path) }, nil
 		}
+		log.Printf("⚠️  Supabase profile restore failed, falling back to disk: %v", err)
 	}
 
-	if _, err := os.Stat(profileJSONPath); err != nil {
+	diskProfilePath := resolvedPath(profileJSONPath)
+	if _, err := os.Stat(diskProfilePath); err != nil {
 		return "", nil, err
 	}
 
-	return profileJSONPath, func() {}, nil
+	return diskProfilePath, func() {}, nil
 }
 
 func writeJSONMap(path string, payload map[string]interface{}) error {
@@ -1087,13 +1088,15 @@ func createProfileFileForPipeline(userID string, supabaseStore *store.SupabaseSt
 		if err == nil {
 			return path, func() { os.Remove(path) }, nil
 		}
+		log.Printf("⚠️  Supabase pipeline profile restore failed, falling back to disk: %v", err)
 	}
 
-	if _, err := os.Stat(profileJSONPath); err != nil {
+	diskProfilePath := resolvedPath(profileJSONPath)
+	if _, err := os.Stat(diskProfilePath); err != nil {
 		return "", nil, err
 	}
 
-	return profileJSONPath, func() {}, nil
+	return diskProfilePath, func() {}, nil
 }
 
 func sanitizeFileComponent(value string) string {
@@ -1107,4 +1110,17 @@ func sanitizeFileComponent(value string) string {
 		return "user"
 	}
 	return clean
+}
+
+func resolvedPath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+
+	return absPath
 }
