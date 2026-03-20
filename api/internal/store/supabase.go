@@ -90,20 +90,20 @@ type pipelineRunRow struct {
 type jobUpsertPayload struct {
 	ExternalKey    string                 `json:"external_key"`
 	Source         string                 `json:"source"`
-	SourceJobID    string                 `json:"source_job_id,omitempty"`
+	SourceJobID    string                 `json:"source_job_id"`
 	ExternalURL    string                 `json:"external_url"`
 	Title          string                 `json:"title"`
-	Company        string                 `json:"company,omitempty"`
-	Location       string                 `json:"location,omitempty"`
-	Country        string                 `json:"country,omitempty"`
-	CountryCode    string                 `json:"country_code,omitempty"`
-	RemoteType     string                 `json:"remote_type,omitempty"`
-	EmploymentType string                 `json:"employment_type,omitempty"`
+	Company        string                 `json:"company"`
+	Location       string                 `json:"location"`
+	Country        string                 `json:"country"`
+	CountryCode    string                 `json:"country_code"`
+	RemoteType     string                 `json:"remote_type"`
+	EmploymentType string                 `json:"employment_type"`
 	ListingStatus  string                 `json:"listing_status"`
-	SalaryText     string                 `json:"salary_text,omitempty"`
-	Description    string                 `json:"description,omitempty"`
-	PostedAt       *string                `json:"posted_at,omitempty"`
-	ExpiresAt      *string                `json:"expires_at,omitempty"`
+	SalaryText     string                 `json:"salary_text"`
+	Description    string                 `json:"description"`
+	PostedAt       *string                `json:"posted_at"`
+	ExpiresAt      *string                `json:"expires_at"`
 	LastSeenAt     string                 `json:"last_seen_at"`
 	ScrapedAt      string                 `json:"scraped_at"`
 	RawPayload     map[string]interface{} `json:"raw_payload"`
@@ -119,8 +119,8 @@ type jobMatchUpsertPayload struct {
 	JobID          string             `json:"job_id"`
 	CVVersionID    string             `json:"cv_version_id"`
 	MatchScore     float64            `json:"match_score"`
-	ScoreBreakdown map[string]float64 `json:"score_breakdown,omitempty"`
-	MatchLabel     string             `json:"match_label,omitempty"`
+	ScoreBreakdown map[string]float64 `json:"score_breakdown"`
+	MatchLabel     string             `json:"match_label"`
 	MatchedAt      string             `json:"matched_at"`
 }
 
