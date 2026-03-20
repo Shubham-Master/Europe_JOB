@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
 import './PipelinePage.css'
 
@@ -18,6 +19,7 @@ function getStepIndex(status) {
 }
 
 export default function PipelinePage() {
+  const navigate = useNavigate()
   const [pipeline, setPipeline] = useState({
     status: 'idle',
     current_step: 'idle',
@@ -28,6 +30,7 @@ export default function PipelinePage() {
     message: 'Pipeline has not run yet',
   })
   const [error, setError] = useState('')
+  const previousStatus = useRef('idle')
 
   useEffect(() => {
     fetchStatus()
@@ -42,6 +45,13 @@ export default function PipelinePage() {
 
     return () => clearInterval(timer)
   }, [pipeline.status])
+
+  useEffect(() => {
+    if (previousStatus.current === 'running' && pipeline.status === 'done') {
+      navigate('/jobs')
+    }
+    previousStatus.current = pipeline.status
+  }, [navigate, pipeline.status])
 
   const fetchStatus = async () => {
     try {

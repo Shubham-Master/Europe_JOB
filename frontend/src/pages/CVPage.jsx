@@ -199,7 +199,10 @@ export default function CVPage() {
                   className="history-preview"
                   onClick={() => setProfile(item.profile)}
                 >
-                  <span className="history-name">{item.filename || item.profile?.full_name || 'CV snapshot'}</span>
+                  <span className="history-name">{item.profile?.full_name || 'CV snapshot'}</span>
+                  {item.filename && (
+                    <span className="history-file">{item.filename}</span>
+                  )}
                   <span className="history-meta">
                     {item.profile?.current_title || 'Untitled profile'} · {new Date(item.saved_at).toLocaleString()}
                   </span>

@@ -147,11 +147,22 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
 }
 
 .history-name {
   color: var(--text);
   font-weight: 600;
+}
+
+.history-file {
+  color: var(--text2);
+  font-size: 12.5px;
 }
 
 .history-meta {

@@ -77,14 +77,20 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
   const countries = ['All', ...new Set(jobs.map(job => job.country).filter(Boolean))]
   const sources = ['All', ...new Set(jobs.map(job => job.source).filter(Boolean))]
 
-  const filtered = jobs.filter(job => {
+  const baseFiltered = jobs.filter(job => {
     if (country !== 'All' && job.country !== country) return false
     if (source !== 'All' && job.source !== source) return false
-    if (hideGeoLocked && isLikelyGeoLocked(job)) return false
     if (job.match_score < minScore) return false
     if (search &&
         !job.title.toLowerCase().includes(search.toLowerCase()) &&
         !job.company.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
+  const geoLockedMatches = baseFiltered.filter(isLikelyGeoLocked).length
+
+  const filtered = baseFiltered.filter(job => {
+    if (hideGeoLocked && isLikelyGeoLocked(job)) return false
     return true
   }).sort((a, b) => {
     if (sortBy === 'latest') {
@@ -162,7 +168,11 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
 
         {!loading && filtered.length === 0 && (
           <div className="empty-state">
-            {jobs.length === 0 ? 'No matched jobs yet. Run the pipeline after uploading your CV.' : 'No jobs match your filters'}
+            {jobs.length === 0
+              ? 'No matched jobs yet. Run the pipeline after uploading your CV.'
+              : hideGeoLocked && geoLockedMatches > 0
+                ? `All ${geoLockedMatches} jobs in the current filter look geo-restricted from your region. Turn this toggle off to review them.`
+                : 'No jobs match your filters'}
           </div>
         )}
 
