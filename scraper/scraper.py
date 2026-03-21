@@ -40,6 +40,8 @@ def run_all_scrapers(profile_path: str = str(DEFAULT_PROFILE_PATH), output_path:
     print("🌍 EUROPE JOB HUNTER — SCRAPER")
     print(f"👤 Profile: {profile.get('full_name', 'Unknown')}")
     print(f"🎯 Target: {', '.join(profile.get('target_roles', [])[:3])}")
+    if profile.get("target_countries"):
+        print(f"🧭 Countries: {', '.join(profile.get('target_countries', []))}")
     print("=" * 60)
 
     all_jobs = []

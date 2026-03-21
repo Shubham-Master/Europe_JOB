@@ -77,6 +77,11 @@ Google sign-in notes:
 - Add your local and deployed frontend URLs to the Supabase redirect allow-list
 - Keep the service-role key on the backend only; never expose it in Vite env files
 
+Supabase SQL setup:
+
+- Run [supabase/advisor_hardening_migration.sql](/Users/ankitakant/Desktop/Shubham/GIT/Europe_JOB/supabase/advisor_hardening_migration.sql) after the base schema to add per-user ownership, RLS, and user-scoped job uniqueness
+- Run [supabase/user_profiles_migration.sql](/Users/ankitakant/Desktop/Shubham/GIT/Europe_JOB/supabase/user_profiles_migration.sql) to enable the My Profile page and country targeting
+
 ## Local Run
 
 Backend:

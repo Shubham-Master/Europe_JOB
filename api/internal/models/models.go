@@ -23,21 +23,22 @@ type Job struct {
 	PostedAt       string             `json:"posted_at,omitempty"`
 	ExpiresAt      string             `json:"expires_at,omitempty"`
 	Seen           bool               `json:"seen"`
+	Saved          bool               `json:"saved"`
 }
 
 // Profile represents the parsed CV profile
 type Profile struct {
-	FullName            string       `json:"full_name"`
-	CurrentTitle        string       `json:"current_title"`
-	SeniorityLevel      string       `json:"seniority_level"`
-	YearsOfExperience   int          `json:"years_of_experience"`
-	TechnicalSkills     []string     `json:"technical_skills"`
-	ProgrammingLangs    []string     `json:"programming_languages"`
-	FrameworksAndTools  []string     `json:"frameworks_and_tools"`
-	Domains             []string     `json:"domains"`
-	TopKeywords         []string     `json:"top_keywords"`
-	TargetRoles         []string     `json:"target_roles"`
-	Languages           []Language   `json:"languages"`
+	FullName           string     `json:"full_name"`
+	CurrentTitle       string     `json:"current_title"`
+	SeniorityLevel     string     `json:"seniority_level"`
+	YearsOfExperience  int        `json:"years_of_experience"`
+	TechnicalSkills    []string   `json:"technical_skills"`
+	ProgrammingLangs   []string   `json:"programming_languages"`
+	FrameworksAndTools []string   `json:"frameworks_and_tools"`
+	Domains            []string   `json:"domains"`
+	TopKeywords        []string   `json:"top_keywords"`
+	TargetRoles        []string   `json:"target_roles"`
+	Languages          []Language `json:"languages"`
 }
 
 type Language struct {
@@ -47,13 +48,13 @@ type Language struct {
 
 // CoverLetterRequest is the input for cover letter generation
 type CoverLetterRequest struct {
-	JobID       string  `json:"job_id" binding:"required"`
-	JobTitle    string  `json:"job_title"`
-	Company     string  `json:"company"`
-	Location    string  `json:"location"`
-	JobURL      string  `json:"job_url"`
-	JobDesc     string  `json:"job_description"`
-	MatchScore  float64 `json:"match_score"`
+	JobID      string  `json:"job_id" binding:"required"`
+	JobTitle   string  `json:"job_title"`
+	Company    string  `json:"company"`
+	Location   string  `json:"location"`
+	JobURL     string  `json:"job_url"`
+	JobDesc    string  `json:"job_description"`
+	MatchScore float64 `json:"match_score"`
 }
 
 // CoverLetterResponse is the output from cover letter generation
@@ -77,6 +78,16 @@ type GuideChatRequest struct {
 type ActivateCVRequest struct {
 	Filename string                 `json:"filename"`
 	Profile  map[string]interface{} `json:"profile" binding:"required"`
+}
+
+type UserProfile struct {
+	FullName        string   `json:"full_name"`
+	WhatsAppNumber  string   `json:"whatsapp_number"`
+	TargetCountries []string `json:"target_countries"`
+}
+
+type UpdateSavedJobRequest struct {
+	Saved bool `json:"saved"`
 }
 
 // PipelineStatus tracks the current run

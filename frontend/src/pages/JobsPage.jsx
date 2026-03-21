@@ -17,6 +17,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
   const [country, setCountry] = useState('All')
   const [source, setSource]   = useState('All')
   const [hideGeoLocked, setHideGeoLocked] = useState(false)
+  const [savedOnly, setSavedOnly] = useState(false)
   const [minScore, setMinScore] = useState(0)
   const [sortBy, setSortBy]   = useState('score')
   const [loading, setLoading] = useState(true)
@@ -49,10 +50,29 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
     } catch {}
   }
 
+  const updateSaved = async (jobId, saved) => {
+    try {
+      await api.put(`/api/v1/jobs/${jobId}/save`, { saved })
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not update this saved job.')
+      setJobs((current) => current.map((job) => (
+        job.id === jobId ? { ...job, saved: !saved } : job
+      )))
+    }
+  }
+
   const updateSeenLocally = (jobId) => {
     setJobs(current => current.map(job => (
       job.id === jobId ? { ...job, seen: true } : job
     )))
+  }
+
+  const toggleSaved = (job) => {
+    const nextSaved = !job.saved
+    setJobs((current) => current.map((item) => (
+      item.id === job.id ? { ...item, saved: nextSaved } : item
+    )))
+    updateSaved(job.id, nextSaved)
   }
 
   const openJob = (job) => {
@@ -80,6 +100,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
   const baseFiltered = jobs.filter(job => {
     if (country !== 'All' && job.country !== country) return false
     if (source !== 'All' && job.source !== source) return false
+    if (savedOnly && !job.saved) return false
     if (job.match_score < minScore) return false
     if (search &&
         !job.title.toLowerCase().includes(search.toLowerCase()) &&
@@ -106,6 +127,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
     excellent: jobs.filter(job => job.match_score >= 75).length,
     good: jobs.filter(job => job.match_score >= 55 && job.match_score < 75).length,
     unseen: jobs.filter(job => !job.seen).length,
+    saved: jobs.filter(job => job.saved).length,
   }
 
   return (
@@ -120,6 +142,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
           <div className="stat excellent"><span className="stat-num">{stats.excellent}</span><span className="stat-label">Excellent</span></div>
           <div className="stat good"><span className="stat-num">{stats.good}</span><span className="stat-label">Good</span></div>
           <div className="stat unseen"><span className="stat-num">{stats.unseen}</span><span className="stat-label">Unseen</span></div>
+          <div className="stat saved"><span className="stat-num">{stats.saved}</span><span className="stat-label">Saved</span></div>
         </div>
       </div>
 
@@ -147,6 +170,14 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
             onChange={e => setHideGeoLocked(e.target.checked)}
           />
           <span>Hide geo-restricted</span>
+        </label>
+        <label className="filter-toggle">
+          <input
+            type="checkbox"
+            checked={savedOnly}
+            onChange={e => setSavedOnly(e.target.checked)}
+          />
+          <span>Saved only</span>
         </label>
         <div className="score-filter">
           <span className="filter-label">Min Score</span>
@@ -199,6 +230,13 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
                 <ScoreBadge score={job.match_score} />
               </div>
               {job.salary && <div className="job-salary">💰 {job.salary}</div>}
+              <button
+                className={`job-save ${job.saved ? 'active' : ''}`}
+                type="button"
+                onClick={() => toggleSaved(job)}
+              >
+                {job.saved ? '★ Saved job' : '☆ Save job'}
+              </button>
               {isLikelyGeoLocked(job) && (
                 <div className="job-warning">
                   This Adzuna detail page may be geo-restricted. If it blocks you, use the company-careers search fallback.

@@ -32,6 +32,13 @@ type CVVersion struct {
 	ParsedAt     time.Time              `json:"parsed_at"`
 }
 
+type userProfileRow struct {
+	UserID          string   `json:"user_id"`
+	FullName        string   `json:"full_name"`
+	WhatsAppNumber  string   `json:"whatsapp_number"`
+	TargetCountries []string `json:"target_countries"`
+}
+
 type supabaseJobRow struct {
 	ID             string `json:"id"`
 	ExternalKey    string `json:"external_key"`
@@ -60,6 +67,7 @@ type jobMatchFeedRow struct {
 	ScoreBreakdown map[string]float64 `json:"score_breakdown"`
 	Status         string             `json:"status"`
 	IsSeen         bool               `json:"is_seen"`
+	IsSaved        bool               `json:"is_saved"`
 	Jobs           supabaseJobRow     `json:"jobs"`
 }
 
@@ -68,6 +76,9 @@ type jobMatchIdentity struct {
 	JobID       string         `json:"job_id"`
 	CVVersionID string         `json:"cv_version_id"`
 	MatchScore  float64        `json:"match_score"`
+	IsSeen      bool           `json:"is_seen"`
+	IsSaved     bool           `json:"is_saved"`
+	Status      string         `json:"status"`
 	Jobs        supabaseJobKey `json:"jobs"`
 }
 
@@ -76,18 +87,19 @@ type supabaseJobKey struct {
 }
 
 type pipelineRunRow struct {
-	ID          string    `json:"id"`
-	Status      string    `json:"status"`
-	CurrentStep string    `json:"current_step"`
-	Message     string    `json:"message"`
-	JobsFound   int       `json:"jobs_found"`
-	JobsMatched int       `json:"jobs_matched"`
-	TopScore    float64   `json:"top_score"`
-	StartedAt   time.Time `json:"started_at"`
+	ID          string     `json:"id"`
+	Status      string     `json:"status"`
+	CurrentStep string     `json:"current_step"`
+	Message     string     `json:"message"`
+	JobsFound   int        `json:"jobs_found"`
+	JobsMatched int        `json:"jobs_matched"`
+	TopScore    float64    `json:"top_score"`
+	StartedAt   time.Time  `json:"started_at"`
 	FinishedAt  *time.Time `json:"finished_at"`
 }
 
 type jobUpsertPayload struct {
+	UserID         string                 `json:"user_id,omitempty"`
 	ExternalKey    string                 `json:"external_key"`
 	Source         string                 `json:"source"`
 	SourceJobID    string                 `json:"source_job_id"`
@@ -148,14 +160,14 @@ func (s *SupabaseStore) SaveCVVersion(userID string, profile map[string]interfac
 	}
 
 	payload := map[string]interface{}{
-		"filename":             filename,
-		"profile_json":         profile,
-		"full_name":            stringValue(profile["full_name"]),
-		"current_title":        stringValue(profile["current_title"]),
-		"summary":              stringValue(profile["summary"]),
-		"seniority_level":      fallbackString(stringValue(profile["seniority_level"]), "unknown"),
-		"years_of_experience":  numericValue(profile["years_of_experience"]),
-		"is_active":            true,
+		"filename":            filename,
+		"profile_json":        profile,
+		"full_name":           stringValue(profile["full_name"]),
+		"current_title":       stringValue(profile["current_title"]),
+		"summary":             stringValue(profile["summary"]),
+		"seniority_level":     fallbackString(stringValue(profile["seniority_level"]), "unknown"),
+		"years_of_experience": numericValue(profile["years_of_experience"]),
+		"is_active":           true,
 	}
 	if strings.TrimSpace(userID) != "" {
 		payload["user_id"] = userID
@@ -197,6 +209,49 @@ func (s *SupabaseStore) GetActiveCVVersion(userID string) (*CVVersion, error) {
 	return &rows[0], nil
 }
 
+func (s *SupabaseStore) GetUserProfile(userID string) (*models.UserProfile, error) {
+	if !s.Enabled() || strings.TrimSpace(userID) == "" {
+		return nil, nil
+	}
+
+	query := url.Values{}
+	query.Set("select", "user_id,full_name,whatsapp_number,target_countries")
+	query.Set("user_id", "eq."+userID)
+	query.Set("limit", "1")
+
+	var rows []userProfileRow
+	if err := s.requestJSON(http.MethodGet, "user_profiles", query, nil, "", &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	return &models.UserProfile{
+		FullName:        rows[0].FullName,
+		WhatsAppNumber:  rows[0].WhatsAppNumber,
+		TargetCountries: rows[0].TargetCountries,
+	}, nil
+}
+
+func (s *SupabaseStore) UpsertUserProfile(userID string, profile models.UserProfile) error {
+	if !s.Enabled() || strings.TrimSpace(userID) == "" {
+		return nil
+	}
+
+	payload := map[string]interface{}{
+		"user_id":          userID,
+		"full_name":        strings.TrimSpace(profile.FullName),
+		"whatsapp_number":  strings.TrimSpace(profile.WhatsAppNumber),
+		"target_countries": uniqueNormalizedCountries(profile.TargetCountries),
+	}
+
+	query := url.Values{}
+	query.Set("on_conflict", "user_id")
+
+	return s.requestJSON(http.MethodPost, "user_profiles", query, payload, "resolution=merge-duplicates,return=minimal", nil)
+}
+
 func (s *SupabaseStore) RestoreActiveProfile(userID, path string) (map[string]interface{}, error) {
 	cv, err := s.GetActiveCVVersion(userID)
 	if err != nil {
@@ -227,7 +282,7 @@ func (s *SupabaseStore) GetJobs(userID string, country string, minScore string) 
 	}
 
 	query := url.Values{}
-	query.Set("select", "id,job_id,cv_version_id,match_score,score_breakdown,status,is_seen,jobs!inner(external_key,source_job_id,external_url,title,company,location,country,country_code,description,salary_text,source,employment_type,remote_type,scraped_at,posted_at,expires_at)")
+	query.Set("select", "id,job_id,cv_version_id,match_score,score_breakdown,status,is_seen,is_saved,jobs!inner(external_key,source_job_id,external_url,title,company,location,country,country_code,description,salary_text,source,employment_type,remote_type,scraped_at,posted_at,expires_at)")
 	if strings.TrimSpace(userID) != "" {
 		query.Set("user_id", "eq."+userID)
 	}
@@ -268,7 +323,7 @@ func (s *SupabaseStore) GetJobByExternalKey(userID, externalKey string) (*models
 	}
 
 	query := url.Values{}
-	query.Set("select", "id,job_id,cv_version_id,match_score,score_breakdown,status,is_seen,jobs!inner(external_key,source_job_id,external_url,title,company,location,country,country_code,description,salary_text,source,employment_type,remote_type,scraped_at,posted_at,expires_at)")
+	query.Set("select", "id,job_id,cv_version_id,match_score,score_breakdown,status,is_seen,is_saved,jobs!inner(external_key,source_job_id,external_url,title,company,location,country,country_code,description,salary_text,source,employment_type,remote_type,scraped_at,posted_at,expires_at)")
 	if strings.TrimSpace(userID) != "" {
 		query.Set("user_id", "eq."+userID)
 	}
@@ -321,6 +376,47 @@ func (s *SupabaseStore) MarkJobSeen(userID, externalKey string) error {
 	return s.requestJSON(http.MethodPatch, "job_matches", query, payload, "return=minimal", nil)
 }
 
+func (s *SupabaseStore) UpdateJobSaved(userID, externalKey string, saved bool) error {
+	if !s.Enabled() {
+		return nil
+	}
+
+	cv, err := s.GetActiveCVVersion(userID)
+	if err != nil {
+		return err
+	}
+	if cv == nil {
+		return nil
+	}
+
+	match, err := s.findMatchByExternalKey(userID, cv.ID, externalKey)
+	if err != nil {
+		return err
+	}
+	if match == nil {
+		return nil
+	}
+
+	query := url.Values{}
+	query.Set("id", "eq."+match.ID)
+
+	nextStatus := match.Status
+	if saved {
+		nextStatus = "saved"
+	} else if match.IsSeen {
+		nextStatus = "seen"
+	} else {
+		nextStatus = "new"
+	}
+
+	payload := map[string]interface{}{
+		"is_saved": saved,
+		"status":   nextStatus,
+	}
+
+	return s.requestJSON(http.MethodPatch, "job_matches", query, payload, "return=minimal", nil)
+}
+
 func (s *SupabaseStore) SyncJobsAndMatches(userID, cvVersionID string, rawJobs []models.Job, matchedJobs []models.Job) error {
 	if !s.Enabled() || strings.TrimSpace(cvVersionID) == "" {
 		return nil
@@ -328,7 +424,7 @@ func (s *SupabaseStore) SyncJobsAndMatches(userID, cvVersionID string, rawJobs [
 
 	combinedJobs := dedupeJobs(append(append([]models.Job{}, rawJobs...), matchedJobs...))
 
-	identities, err := s.upsertJobs(combinedJobs)
+	identities, err := s.upsertJobs(userID, combinedJobs)
 	if err != nil {
 		return err
 	}
@@ -385,7 +481,7 @@ func (s *SupabaseStore) SaveCoverLetter(userID string, job models.Job, data map[
 	}
 
 	if match == nil {
-		jobRows, err := s.upsertJobs([]models.Job{job})
+		jobRows, err := s.upsertJobs(userID, []models.Job{job})
 		if err != nil {
 			return err
 		}
@@ -444,13 +540,13 @@ func (s *SupabaseStore) CreatePipelineRun(userID, cvVersionID string, state mode
 	}
 
 	payload := map[string]interface{}{
-		"status":        state.Status,
-		"current_step":  state.CurrentStep,
-		"message":       state.Message,
-		"jobs_found":    state.JobsFound,
-		"jobs_matched":  state.JobsMatched,
-		"top_score":     state.TopScore,
-		"started_at":    state.LastRun.UTC().Format(time.RFC3339),
+		"status":       state.Status,
+		"current_step": state.CurrentStep,
+		"message":      state.Message,
+		"jobs_found":   state.JobsFound,
+		"jobs_matched": state.JobsMatched,
+		"top_score":    state.TopScore,
+		"started_at":   state.LastRun.UTC().Format(time.RFC3339),
 	}
 	if strings.TrimSpace(userID) != "" {
 		payload["user_id"] = userID
@@ -530,7 +626,7 @@ func (s *SupabaseStore) GetLatestPipelineStatus(userID string) (*models.Pipeline
 	}, nil
 }
 
-func (s *SupabaseStore) upsertJobs(jobs []models.Job) (map[string]string, error) {
+func (s *SupabaseStore) upsertJobs(userID string, jobs []models.Job) (map[string]string, error) {
 	if len(jobs) == 0 {
 		return map[string]string{}, nil
 	}
@@ -549,6 +645,7 @@ func (s *SupabaseStore) upsertJobs(jobs []models.Job) (map[string]string, error)
 		}
 
 		payloads = append(payloads, jobUpsertPayload{
+			UserID:         userID,
 			ExternalKey:    externalKey,
 			Source:         normalizedSource(job.Source),
 			SourceJobID:    fallbackString(job.SourceJobID, externalKey),
@@ -576,7 +673,7 @@ func (s *SupabaseStore) upsertJobs(jobs []models.Job) (map[string]string, error)
 	}
 
 	query := url.Values{}
-	query.Set("on_conflict", "external_key")
+	query.Set("on_conflict", "user_id,external_key")
 
 	var rows []jobIdentityRow
 	if err := s.requestJSON(http.MethodPost, "jobs", query, payloads, "resolution=merge-duplicates,return=representation", &rows); err != nil {
@@ -593,7 +690,7 @@ func (s *SupabaseStore) upsertJobs(jobs []models.Job) (map[string]string, error)
 
 func (s *SupabaseStore) findMatchByExternalKey(userID, cvVersionID, externalKey string) (*jobMatchIdentity, error) {
 	query := url.Values{}
-	query.Set("select", "id,job_id,cv_version_id,match_score,jobs!inner(external_key)")
+	query.Set("select", "id,job_id,cv_version_id,match_score,is_seen,is_saved,status,jobs!inner(external_key)")
 	if strings.TrimSpace(userID) != "" {
 		query.Set("user_id", "eq."+userID)
 	}
@@ -618,7 +715,7 @@ func (s *SupabaseStore) requestJSON(method, resource string, query url.Values, b
 	}
 
 	endpoint := s.baseURL + "/rest/v1/" + resource
-	if query != nil && len(query) > 0 {
+	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
 
@@ -687,6 +784,7 @@ func flattenMatchRow(row jobMatchFeedRow) models.Job {
 		PostedAt:       row.Jobs.PostedAt,
 		ExpiresAt:      row.Jobs.ExpiresAt,
 		Seen:           row.IsSeen,
+		Saved:          row.IsSaved,
 	}
 }
 
@@ -841,6 +939,22 @@ func matchLabel(score float64) string {
 	default:
 		return "Low"
 	}
+}
+
+func uniqueNormalizedCountries(items []string) []string {
+	seen := map[string]bool{}
+	result := make([]string, 0, len(items))
+
+	for _, item := range items {
+		normalized := strings.ToLower(strings.TrimSpace(item))
+		if normalized == "" || seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		result = append(result, normalized)
+	}
+
+	return result
 }
 
 func writeJSONFile(path string, payload map[string]interface{}) error {

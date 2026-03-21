@@ -43,6 +43,29 @@ HEADERS = {
     "Accept": "application/rss+xml, application/xml, text/xml",
 }
 
+COUNTRY_CODE_TO_LOCATION = {
+    "at": "Austria",
+    "be": "Belgium",
+    "ch": "Switzerland",
+    "cz": "Czechia",
+    "de": "Germany",
+    "dk": "Denmark",
+    "es": "Spain",
+    "fi": "Finland",
+    "fr": "France",
+    "gb": "United Kingdom",
+    "ie": "Ireland",
+    "it": "Italy",
+    "lu": "Luxembourg",
+    "nl": "Netherlands",
+    "no": "Norway",
+    "pl": "Poland",
+    "pt": "Portugal",
+    "se": "Sweden",
+}
+
+DEFAULT_RSS_LOCATIONS = ["Netherlands", "Germany", "Belgium"]
+
 
 def generate_job_id(url: str) -> str:
     return hashlib.md5(url.encode()).hexdigest()[:12]
@@ -145,6 +168,21 @@ def clean_html(text: str) -> str:
     return text.strip()
 
 
+def select_rss_locations(profile: dict, locations: list[str] = None) -> list[str]:
+    """Resolve selected country codes into RSS search locations."""
+    if locations is not None:
+        return locations
+
+    requested_countries = profile.get("target_countries", []) or []
+    resolved = [
+        COUNTRY_CODE_TO_LOCATION[country.lower().strip()]
+        for country in requested_countries
+        if isinstance(country, str) and country.lower().strip() in COUNTRY_CODE_TO_LOCATION
+    ]
+
+    return resolved or DEFAULT_RSS_LOCATIONS
+
+
 def scrape_rss_for_profile(profile: dict, locations: list[str] = None) -> list[dict]:
     """
     Scrape RSS feeds based on CV profile keywords.
@@ -156,8 +194,7 @@ def scrape_rss_for_profile(profile: dict, locations: list[str] = None) -> list[d
     Returns:
         List of scraped jobs
     """
-    if locations is None:
-        locations = ["Netherlands", "Germany", "Belgium"]
+    locations = select_rss_locations(profile, locations)
 
     from scraper.adzuna import build_keywords
     keywords = build_keywords(profile)
@@ -169,7 +206,7 @@ def scrape_rss_for_profile(profile: dict, locations: list[str] = None) -> list[d
     seen_ids = set()
 
     for keyword in keywords[:2]:  # Keep RSS fast enough for manual pipeline runs
-        for location in locations[:3]:  # Limit to 3 locations
+        for location in locations:
             jobs = fetch_indeed_rss(keyword, location)
 
             for job in jobs:

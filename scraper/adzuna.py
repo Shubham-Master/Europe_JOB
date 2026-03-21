@@ -16,8 +16,8 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 
-# European countries supported by Adzuna
-EUROPEAN_COUNTRIES = {
+# Countries this project currently queries through Adzuna.
+ADZUNA_COUNTRIES = {
     "gb": "United Kingdom",
     "de": "Germany",
     "fr": "France",
@@ -29,6 +29,8 @@ EUROPEAN_COUNTRIES = {
     "it": "Italy",
     "es": "Spain",
 }
+
+DEFAULT_TARGET_COUNTRIES = ["nl", "de", "be", "ch"]
 
 BASE_URL = "https://api.adzuna.com/v1/api/jobs"
 
@@ -76,7 +78,7 @@ def fetch_jobs_by_keyword(
         }
 
         try:
-            print(f"  📡 Fetching page {page} for '{keyword}' in {EUROPEAN_COUNTRIES.get(country_code, country_code)}...")
+            print(f"  📡 Fetching page {page} for '{keyword}' in {ADZUNA_COUNTRIES.get(country_code, country_code)}...")
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
@@ -116,7 +118,7 @@ def parse_adzuna_job(raw: dict, country_code: str) -> dict:
         "title": raw.get("title", "").strip(),
         "company": raw.get("company", {}).get("display_name", "Unknown"),
         "location": raw.get("location", {}).get("display_name", ""),
-        "country": EUROPEAN_COUNTRIES.get(country_code, country_code.upper()),
+        "country": ADZUNA_COUNTRIES.get(country_code, country_code.upper()),
         "country_code": country_code,
         "url": url,
         "description": raw.get("description", "").strip(),
@@ -131,6 +133,22 @@ def parse_adzuna_job(raw: dict, country_code: str) -> dict:
     }
 
 
+def select_adzuna_countries(profile: dict, countries: list[str] = None) -> list[str]:
+    """Return the subset of requested countries that this Adzuna integration can query."""
+    if countries is not None:
+        requested = countries
+    else:
+        requested = profile.get("target_countries", []) or []
+
+    normalized = [
+        country.lower().strip()
+        for country in requested
+        if isinstance(country, str) and country.lower().strip() in ADZUNA_COUNTRIES
+    ]
+
+    return normalized or DEFAULT_TARGET_COUNTRIES
+
+
 def scrape_for_profile(profile: dict, countries: list[str] = None, pages_per_search: int = 1) -> list[dict]:
     """
     Main function: scrape jobs based on a parsed CV profile.
@@ -143,20 +161,19 @@ def scrape_for_profile(profile: dict, countries: list[str] = None, pages_per_sea
     Returns:
         List of all scraped jobs (deduplicated)
     """
-    if countries is None:
-        countries = ["nl", "de", "be", "ch"]
+    countries = select_adzuna_countries(profile, countries)
 
     # Build search keywords from profile
     keywords = build_keywords(profile)
     print(f"\n🔍 Search keywords: {keywords}")
-    print(f"🌍 Countries: {[EUROPEAN_COUNTRIES[c] for c in countries]}\n")
+    print(f"🌍 Countries: {[ADZUNA_COUNTRIES[c] for c in countries]}\n")
 
     all_jobs = []
     seen_ids = set()
 
     for keyword in keywords[:3]:
         for country in countries:
-            print(f"\n[{keyword}] → {EUROPEAN_COUNTRIES[country]}")
+            print(f"\n[{keyword}] → {ADZUNA_COUNTRIES[country]}")
             jobs = fetch_jobs_by_keyword(keyword, country, pages=pages_per_search)
 
             # Deduplicate

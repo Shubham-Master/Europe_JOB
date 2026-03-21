@@ -44,6 +44,13 @@ func main() {
 			jobs.GET("", h.GetJobs)              // GET  /api/v1/jobs?country=DE&min_score=70
 			jobs.GET("/:id", h.GetJob)           // GET  /api/v1/jobs/:id
 			jobs.PUT("/:id/seen", h.MarkJobSeen) // PUT  /api/v1/jobs/:id/seen
+			jobs.PUT("/:id/save", h.UpdateJobSaved)
+		}
+
+		profile := v1.Group("/profile")
+		{
+			profile.GET("", h.GetUserProfile)
+			profile.PUT("", h.UpdateUserProfile)
 		}
 
 		// CV

@@ -23,24 +23,41 @@ import (
 
 // In-memory store (will be replaced by Supabase later)
 var (
-	jobStore      []models.Job
-	jobMu         sync.RWMutex
-	pipelineState = models.PipelineStatus{
-		Status:      "idle",
-		CurrentStep: "idle",
-		Message:     "Pipeline has not run yet",
-	}
-	pipelineMu      sync.RWMutex
+	jobStore         []models.Job
+	jobMu            sync.RWMutex
+	pipelineStates   = map[string]models.PipelineStatus{}
+	pipelineMu       sync.RWMutex
 	pipelineCancelMu sync.Mutex
-	pipelineCancels = map[string]context.CancelFunc{}
+	pipelineCancels  = map[string]context.CancelFunc{}
 )
 
 const (
-	profileJSONPath = "../data/profile.json"
-	rawJobsJSONPath = "../data/jobs_raw.json"
-	matchedJobsPath = "../data/jobs_matched.json"
+	profileJSONPath    = "../data/profile.json"
+	rawJobsJSONPath    = "../data/jobs_raw.json"
+	matchedJobsPath    = "../data/jobs_matched.json"
 	pipelineRunTimeout = 5 * time.Minute
 )
+
+var supportedTargetCountries = map[string]bool{
+	"at": true,
+	"be": true,
+	"ch": true,
+	"cz": true,
+	"de": true,
+	"dk": true,
+	"es": true,
+	"fi": true,
+	"fr": true,
+	"gb": true,
+	"ie": true,
+	"it": true,
+	"lu": true,
+	"nl": true,
+	"no": true,
+	"pl": true,
+	"pt": true,
+	"se": true,
+}
 
 var (
 	errPipelineStopped  = errors.New("pipeline stopped by user")
@@ -79,6 +96,7 @@ func (h *Handler) GetJobs(c *gin.Context) {
 	userID := currentUserID(c)
 	country := c.Query("country")
 	minScore := c.Query("min_score")
+	userScoped := isUserScopedRequest(userID, h.store)
 
 	if h.store != nil && h.store.Enabled() {
 		jobs, err := h.store.GetJobs(userID, country, minScore)
@@ -90,6 +108,14 @@ func (h *Handler) GetJobs(c *gin.Context) {
 			c.JSON(http.StatusOK, models.APIResponse{
 				Success: true,
 				Data:    jobs,
+			})
+			return
+		}
+
+		if userScoped {
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "Could not load your jobs right now.",
 			})
 			return
 		}
@@ -132,6 +158,7 @@ func (h *Handler) GetJobs(c *gin.Context) {
 func (h *Handler) GetJob(c *gin.Context) {
 	userID := currentUserID(c)
 	id := c.Param("id")
+	userScoped := isUserScopedRequest(userID, h.store)
 
 	if h.store != nil && h.store.Enabled() {
 		job, err := h.store.GetJobByExternalKey(userID, id)
@@ -140,6 +167,10 @@ func (h *Handler) GetJob(c *gin.Context) {
 			return
 		}
 		if err != nil {
+			if userScoped {
+				c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Could not load this job right now."})
+				return
+			}
 			log.Printf("⚠️  Supabase job lookup failed, falling back to disk: %v", err)
 		}
 	}
@@ -169,9 +200,14 @@ func (h *Handler) GetJob(c *gin.Context) {
 func (h *Handler) MarkJobSeen(c *gin.Context) {
 	userID := currentUserID(c)
 	id := c.Param("id")
+	userScoped := isUserScopedRequest(userID, h.store)
 
 	if h.store != nil && h.store.Enabled() {
 		if err := h.store.MarkJobSeen(userID, id); err != nil {
+			if userScoped {
+				c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Could not update this job right now."})
+				return
+			}
 			log.Printf("⚠️  Supabase seen update failed, falling back to disk: %v", err)
 		} else {
 			jobMu.Lock()
@@ -217,11 +253,132 @@ func (h *Handler) MarkJobSeen(c *gin.Context) {
 	c.JSON(http.StatusNotFound, models.APIResponse{Success: false, Error: "job not found"})
 }
 
+func (h *Handler) UpdateJobSaved(c *gin.Context) {
+	userID := currentUserID(c)
+	id := c.Param("id")
+
+	var req models.UpdateSavedJobRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: err.Error()})
+		return
+	}
+
+	if h.store == nil || !h.store.Enabled() {
+		c.JSON(http.StatusServiceUnavailable, models.APIResponse{
+			Success: false,
+			Error:   "Saved jobs are unavailable right now.",
+		})
+		return
+	}
+
+	if err := h.store.UpdateJobSaved(userID, id, req.Saved); err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "Could not update this saved job right now.",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "Saved job updated",
+	})
+}
+
+func (h *Handler) GetUserProfile(c *gin.Context) {
+	userID := currentUserID(c)
+	profile := models.UserProfile{}
+
+	if h.store != nil && h.store.Enabled() {
+		saved, err := h.store.GetUserProfile(userID)
+		if err != nil {
+			if isMissingUserProfilesStorage(err) {
+				if cvVersion, cvErr := h.store.GetActiveCVVersion(userID); cvErr == nil && cvVersion != nil {
+					profile.FullName = cvVersion.FullName
+				}
+				c.JSON(http.StatusOK, models.APIResponse{
+					Success: true,
+					Data:    profile,
+				})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "Could not load your profile right now.",
+			})
+			return
+		}
+		if saved != nil {
+			profile = *saved
+		}
+
+		if profile.FullName == "" {
+			if cvVersion, err := h.store.GetActiveCVVersion(userID); err == nil && cvVersion != nil {
+				profile.FullName = cvVersion.FullName
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Data:    profile,
+	})
+}
+
+func (h *Handler) UpdateUserProfile(c *gin.Context) {
+	userID := currentUserID(c)
+
+	var req models.UserProfile
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: err.Error()})
+		return
+	}
+
+	req.TargetCountries = normalizeTargetCountries(req.TargetCountries)
+	if len(req.TargetCountries) == 0 {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "Select at least one Europe or UK country.",
+		})
+		return
+	}
+
+	if h.store == nil || !h.store.Enabled() {
+		c.JSON(http.StatusServiceUnavailable, models.APIResponse{
+			Success: false,
+			Error:   "Profiles are unavailable right now.",
+		})
+		return
+	}
+
+	if err := h.store.UpsertUserProfile(userID, req); err != nil {
+		if isMissingUserProfilesStorage(err) {
+			c.JSON(http.StatusServiceUnavailable, models.APIResponse{
+				Success: false,
+				Error:   "Profile storage is not ready yet. Run supabase/user_profiles_migration.sql once in Supabase SQL Editor, then refresh.",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error:   "Could not save your profile right now.",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "Profile updated",
+		Data:    req,
+	})
+}
+
 // ─── CV ───────────────────────────────────────────────────────────────────────
 
 // ParseCV accepts a CV PDF upload and runs the Python cv_parser
 func (h *Handler) ParseCV(c *gin.Context) {
 	userID := currentUserID(c)
+	userScoped := isUserScopedRequest(userID, h.store)
 	if h.cfg.GeminiKey == "" {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
@@ -243,11 +400,28 @@ func (h *Handler) ParseCV(c *gin.Context) {
 		return
 	}
 
+	outputPath := resolvedPath(profileJSONPath)
+	cleanupOutput := func() {}
+	if userScoped {
+		outputFile, err := os.CreateTemp("", "parsed-profile-*.json")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "failed to prepare parsed profile output",
+			})
+			return
+		}
+		outputPath = outputFile.Name()
+		outputFile.Close()
+		cleanupOutput = func() { os.Remove(outputPath) }
+	}
+	defer cleanupOutput()
+
 	// Run Python CV parser
-	cmd := exec.Command(h.cfg.PythonPath,
+	cmd := exec.Command(resolvedCommandPath(h.cfg.PythonPath),
 		"../cv_parser/cv_parser.py",
 		tmpPath,
-		resolvedPath(profileJSONPath),
+		outputPath,
 	)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
@@ -261,7 +435,7 @@ func (h *Handler) ParseCV(c *gin.Context) {
 		return
 	}
 
-	profileData, err := readJSONFile(resolvedPath(profileJSONPath))
+	profileData, err := readJSONFile(outputPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
@@ -306,6 +480,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 // ActivateProfile makes a selected parsed CV snapshot the active profile.
 func (h *Handler) ActivateProfile(c *gin.Context) {
 	userID := currentUserID(c)
+	userScoped := isUserScopedRequest(userID, h.store)
 	var req models.ActivateCVRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: err.Error()})
@@ -317,17 +492,27 @@ func (h *Handler) ActivateProfile(c *gin.Context) {
 		return
 	}
 
-	profilePath := resolvedPath(profileJSONPath)
-	if err := writeJSONMap(profilePath, req.Profile); err != nil {
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error:   "Could not activate this CV profile locally.",
-		})
-		return
+	if !userScoped {
+		profilePath := resolvedPath(profileJSONPath)
+		if err := writeJSONMap(profilePath, req.Profile); err != nil {
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "Could not activate this CV profile locally.",
+			})
+			return
+		}
 	}
 
 	if h.store != nil && h.store.Enabled() {
 		if _, err := h.store.SaveCVVersion(userID, req.Profile, req.Filename); err != nil {
+			message := "Could not activate this CV profile right now."
+			if userScoped {
+				c.JSON(http.StatusInternalServerError, models.APIResponse{
+					Success: false,
+					Error:   message,
+				})
+				return
+			}
 			log.Printf("⚠️  Supabase CV activation save failed, local profile still updated: %v", err)
 		}
 	}
@@ -400,7 +585,7 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 	defer os.Remove(outputPath)
 
 	cmd := exec.Command(
-		h.cfg.PythonPath,
+		resolvedCommandPath(h.cfg.PythonPath),
 		"../ai_tools/cover_letter.py",
 		"--single",
 		jobPath,
@@ -815,7 +1000,7 @@ func failPipeline(state *models.PipelineStatus, lastRun time.Time, message strin
 }
 
 func runPythonScript(ctx context.Context, cfg *config.Config, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, cfg.PythonPath, args...)
+	cmd := exec.CommandContext(ctx, resolvedCommandPath(cfg.PythonPath), args...)
 	cmd.Dir = ".."
 
 	var out, stderr bytes.Buffer
@@ -854,28 +1039,6 @@ func (h *Handler) buildJobPayload(userID string, req models.CoverLetterRequest) 
 		MatchScore:  req.MatchScore,
 	}
 
-	if found, ok := findJobByID(req.JobID); ok {
-		if job.Title == "" {
-			job.Title = found.Title
-		}
-		if job.Company == "" {
-			job.Company = found.Company
-		}
-		if job.Location == "" {
-			job.Location = found.Location
-		}
-		if job.URL == "" {
-			job.URL = found.URL
-		}
-		if job.Description == "" {
-			job.Description = found.Description
-		}
-		if job.MatchScore == 0 {
-			job.MatchScore = found.MatchScore
-		}
-		return job
-	}
-
 	if h.store != nil && h.store.Enabled() {
 		found, err := h.store.GetJobByExternalKey(userID, req.JobID)
 		if err == nil && found != nil {
@@ -900,7 +1063,34 @@ func (h *Handler) buildJobPayload(userID string, req models.CoverLetterRequest) 
 			if job.Source == "" {
 				job.Source = found.Source
 			}
+			return job
 		}
+	}
+
+	if isUserScopedRequest(userID, h.store) {
+		return job
+	}
+
+	if found, ok := findJobByID(req.JobID); ok {
+		if job.Title == "" {
+			job.Title = found.Title
+		}
+		if job.Company == "" {
+			job.Company = found.Company
+		}
+		if job.Location == "" {
+			job.Location = found.Location
+		}
+		if job.URL == "" {
+			job.URL = found.URL
+		}
+		if job.Description == "" {
+			job.Description = found.Description
+		}
+		if job.MatchScore == 0 {
+			job.MatchScore = found.MatchScore
+		}
+		return job
 	}
 
 	return job
@@ -936,17 +1126,23 @@ func writeTempJSON(payload interface{}) (string, error) {
 
 func (h *Handler) loadProfileData(userID string) (map[string]interface{}, error) {
 	diskProfilePath := resolvedPath(profileJSONPath)
-	if _, err := os.Stat(diskProfilePath); err == nil {
-		return readJSONFile(diskProfilePath)
-	}
 
 	if h.store != nil && h.store.Enabled() {
 		cvVersion, err := h.store.GetActiveCVVersion(userID)
 		if err != nil {
+			if strings.TrimSpace(userID) != "" {
+				return nil, err
+			}
 			log.Printf("⚠️  Supabase CV profile lookup failed, falling back to disk: %v", err)
 		} else if cvVersion != nil {
 			return cvVersion.ProfileJSON, nil
+		} else if strings.TrimSpace(userID) != "" {
+			return nil, os.ErrNotExist
 		}
+	}
+
+	if _, err := os.Stat(diskProfilePath); err == nil {
+		return readJSONFile(diskProfilePath)
 	}
 
 	return readJSONFile(diskProfilePath)
@@ -954,16 +1150,20 @@ func (h *Handler) loadProfileData(userID string) (map[string]interface{}, error)
 
 func (h *Handler) ensureLocalProfileFile(userID string) (string, func(), error) {
 	diskProfilePath := resolvedPath(profileJSONPath)
-	if _, err := os.Stat(diskProfilePath); err == nil {
-		return diskProfilePath, func() {}, nil
-	}
 
 	if h.store != nil && h.store.Enabled() {
 		path, err := createProfileFileForUser(userID, h.store)
 		if err == nil {
 			return path, func() { os.Remove(path) }, nil
 		}
+		if strings.TrimSpace(userID) != "" {
+			return "", nil, err
+		}
 		log.Printf("⚠️  Supabase profile restore failed, falling back to disk: %v", err)
+	}
+
+	if _, err := os.Stat(diskProfilePath); err == nil {
+		return diskProfilePath, func() {}, nil
 	}
 
 	if _, err := os.Stat(diskProfilePath); err != nil {
@@ -987,7 +1187,7 @@ func writeJSONMap(path string, payload map[string]interface{}) error {
 }
 
 func persistPipelineState(supabaseStore *store.SupabaseStore, userID, pipelineRunID string, state models.PipelineStatus) {
-	setPipelineState(normalizePipelineState(state))
+	setPipelineState(userID, normalizePipelineState(state))
 
 	if supabaseStore == nil || !supabaseStore.Enabled() || pipelineRunID == "" {
 		return
@@ -1005,14 +1205,20 @@ func currentUserID(c *gin.Context) string {
 }
 
 func (h *Handler) latestPipelineState(userID string) models.PipelineStatus {
-	state := getPipelineState()
+	state := getPipelineState(userID)
+	userScoped := isUserScopedRequest(userID, h.store)
 
 	if h.store != nil && h.store.Enabled() {
 		latest, err := h.store.GetLatestPipelineStatus(userID)
 		if err != nil {
+			if userScoped {
+				return state
+			}
 			log.Printf("⚠️  Failed to fetch latest pipeline status from Supabase: %v", err)
 		} else if latest != nil {
 			state = mergePipelineStates(state, *latest)
+		} else if userScoped {
+			state = defaultPipelineStatus()
 		}
 	}
 
@@ -1027,15 +1233,19 @@ func defaultPipelineStatus() models.PipelineStatus {
 	}
 }
 
-func getPipelineState() models.PipelineStatus {
+func getPipelineState(userID string) models.PipelineStatus {
 	pipelineMu.RLock()
 	defer pipelineMu.RUnlock()
-	return pipelineState
+	state, ok := pipelineStates[pipelineOwnerKey(userID)]
+	if !ok {
+		return defaultPipelineStatus()
+	}
+	return state
 }
 
-func setPipelineState(state models.PipelineStatus) {
+func setPipelineState(userID string, state models.PipelineStatus) {
 	pipelineMu.Lock()
-	pipelineState = state
+	pipelineStates[pipelineOwnerKey(userID)] = state
 	pipelineMu.Unlock()
 }
 
@@ -1076,6 +1286,10 @@ func pipelineOwnerKey(userID string) string {
 	return userID
 }
 
+func isUserScopedRequest(userID string, supabaseStore *store.SupabaseStore) bool {
+	return strings.TrimSpace(userID) != "" && supabaseStore != nil && supabaseStore.Enabled()
+}
+
 func registerPipelineCancel(userID string, cancel context.CancelFunc) {
 	pipelineCancelMu.Lock()
 	pipelineCancels[pipelineOwnerKey(userID)] = cancel
@@ -1109,19 +1323,29 @@ func pipelineStepError(step string, err error) string {
 	}
 }
 
-func tempProfilePathForUser(userID string) string {
-	return filepath.Join(os.TempDir(), "eurojobs-profile-"+sanitizeFileComponent(userID)+".json")
-}
-
 func createProfileFileForUser(userID string, supabaseStore *store.SupabaseStore) (string, error) {
 	if supabaseStore == nil || !supabaseStore.Enabled() {
 		return "", os.ErrNotExist
 	}
 
-	path := tempProfilePathForUser(userID)
-	_, err := supabaseStore.RestoreActiveProfile(userID, path)
+	file, err := os.CreateTemp("", "eurojobs-profile-"+sanitizeFileComponent(userID)+"-*.json")
 	if err != nil {
 		return "", err
+	}
+	path := file.Name()
+	file.Close()
+
+	profile, err := supabaseStore.RestoreActiveProfile(userID, path)
+	if err != nil {
+		os.Remove(path)
+		return "", err
+	}
+
+	if merged, err := applyUserProfileSettings(profile, userID, supabaseStore); err == nil {
+		if err := writeJSONMap(path, merged); err != nil {
+			os.Remove(path)
+			return "", err
+		}
 	}
 
 	return path, nil
@@ -1129,16 +1353,20 @@ func createProfileFileForUser(userID string, supabaseStore *store.SupabaseStore)
 
 func createProfileFileForPipeline(userID string, supabaseStore *store.SupabaseStore) (string, func(), error) {
 	diskProfilePath := resolvedPath(profileJSONPath)
-	if _, err := os.Stat(diskProfilePath); err == nil {
-		return diskProfilePath, func() {}, nil
-	}
 
 	if supabaseStore != nil && supabaseStore.Enabled() {
 		path, err := createProfileFileForUser(userID, supabaseStore)
 		if err == nil {
 			return path, func() { os.Remove(path) }, nil
 		}
+		if strings.TrimSpace(userID) != "" {
+			return "", nil, err
+		}
 		log.Printf("⚠️  Supabase pipeline profile restore failed, falling back to disk: %v", err)
+	}
+
+	if _, err := os.Stat(diskProfilePath); err == nil {
+		return diskProfilePath, func() {}, nil
 	}
 
 	if _, err := os.Stat(diskProfilePath); err != nil {
@@ -1146,6 +1374,62 @@ func createProfileFileForPipeline(userID string, supabaseStore *store.SupabaseSt
 	}
 
 	return diskProfilePath, func() {}, nil
+}
+
+func applyUserProfileSettings(profile map[string]interface{}, userID string, supabaseStore *store.SupabaseStore) (map[string]interface{}, error) {
+	if supabaseStore == nil || !supabaseStore.Enabled() || strings.TrimSpace(userID) == "" {
+		return profile, nil
+	}
+
+	userProfile, err := supabaseStore.GetUserProfile(userID)
+	if err != nil || userProfile == nil {
+		return profile, err
+	}
+
+	merged := map[string]interface{}{}
+	for key, value := range profile {
+		merged[key] = value
+	}
+
+	if strings.TrimSpace(userProfile.FullName) != "" {
+		merged["preferred_name"] = strings.TrimSpace(userProfile.FullName)
+	}
+	if strings.TrimSpace(userProfile.WhatsAppNumber) != "" {
+		merged["whatsapp_number"] = strings.TrimSpace(userProfile.WhatsAppNumber)
+	}
+	if len(userProfile.TargetCountries) > 0 {
+		merged["target_countries"] = normalizeTargetCountries(userProfile.TargetCountries)
+	}
+
+	return merged, nil
+}
+
+func normalizeTargetCountries(items []string) []string {
+	seen := map[string]bool{}
+	result := make([]string, 0, len(items))
+
+	for _, item := range items {
+		code := strings.ToLower(strings.TrimSpace(item))
+		if !supportedTargetCountries[code] || seen[code] {
+			continue
+		}
+		seen[code] = true
+		result = append(result, code)
+	}
+
+	return result
+}
+
+func isMissingUserProfilesStorage(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "user_profiles") &&
+		(strings.Contains(message, "does not exist") ||
+			strings.Contains(message, "could not find the table") ||
+			strings.Contains(message, "schema cache"))
 }
 
 func sanitizeFileComponent(value string) string {
@@ -1169,6 +1453,28 @@ func resolvedPath(path string) string {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return path
+	}
+
+	return absPath
+}
+
+func resolvedCommandPath(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return "python3"
+	}
+
+	if filepath.IsAbs(trimmed) {
+		return trimmed
+	}
+
+	if !strings.Contains(trimmed, string(filepath.Separator)) && !strings.HasPrefix(trimmed, ".") {
+		return trimmed
+	}
+
+	absPath, err := filepath.Abs(trimmed)
+	if err != nil {
+		return trimmed
 	}
 
 	return absPath

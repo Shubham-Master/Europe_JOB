@@ -2,6 +2,9 @@ const SELECTED_JOB_KEY = 'eurojobs:selected-job'
 const COVER_HISTORY_KEY = 'eurojobs:cover-history'
 const CV_HISTORY_KEY = 'eurojobs:cv-history'
 
+let storageScope = 'anonymous'
+let activeCVScope = 'default'
+
 function canUseStorage() {
   return typeof window !== 'undefined' && Boolean(window.localStorage)
 }
@@ -21,6 +24,22 @@ function writeJSON(key, value) {
   if (!canUseStorage()) return
 
   window.localStorage.setItem(key, JSON.stringify(value))
+}
+
+function scopedKey(key) {
+  return `${key}:${storageScope}`
+}
+
+function cvScopedKey(key) {
+  return `${scopedKey(key)}:${activeCVScope}`
+}
+
+export function setStorageScope(scope) {
+  storageScope = scope && String(scope).trim() ? String(scope).trim() : 'anonymous'
+}
+
+export function setActiveCVScope(signature) {
+  activeCVScope = signature && String(signature).trim() ? String(signature).trim() : 'default'
 }
 
 export function profileSignature(profile) {
@@ -47,22 +66,22 @@ function coverResultSignature(result) {
 }
 
 export function loadSelectedJob() {
-  return readJSON(SELECTED_JOB_KEY, null)
+  return readJSON(cvScopedKey(SELECTED_JOB_KEY), null)
 }
 
 export function saveSelectedJob(job) {
   if (!canUseStorage()) return
 
   if (!job) {
-    window.localStorage.removeItem(SELECTED_JOB_KEY)
+    window.localStorage.removeItem(cvScopedKey(SELECTED_JOB_KEY))
     return
   }
 
-  writeJSON(SELECTED_JOB_KEY, job)
+  writeJSON(cvScopedKey(SELECTED_JOB_KEY), job)
 }
 
 export function getCoverLetterHistory() {
-  return readJSON(COVER_HISTORY_KEY, [])
+  return readJSON(cvScopedKey(COVER_HISTORY_KEY), [])
 }
 
 export function saveCoverLetterResult(result) {
@@ -77,7 +96,7 @@ export function saveCoverLetterResult(result) {
     ...getCoverLetterHistory().filter(item => item?._signature !== entry._signature),
   ].slice(0, 25)
 
-  writeJSON(COVER_HISTORY_KEY, next)
+  writeJSON(cvScopedKey(COVER_HISTORY_KEY), next)
   return next
 }
 
@@ -86,7 +105,7 @@ export function getLatestCoverLetter(jobId) {
 }
 
 export function getCVHistory() {
-  return readJSON(CV_HISTORY_KEY, [])
+  return readJSON(scopedKey(CV_HISTORY_KEY), [])
 }
 
 export function saveCVSnapshot(profile, filename = '') {
@@ -105,6 +124,6 @@ export function saveCVSnapshot(profile, filename = '') {
     ...getCVHistory().filter(item => item?._signature !== entry._signature),
   ].slice(0, 10)
 
-  writeJSON(CV_HISTORY_KEY, next)
+  writeJSON(scopedKey(CV_HISTORY_KEY), next)
   return next
 }

@@ -3,7 +3,7 @@ import api from '../lib/api'
 import { getCVHistory, profileSignature, saveCVSnapshot } from '../lib/storage'
 import './CVPage.css'
 
-export default function CVPage() {
+export default function CVPage({ onActiveProfileChange }) {
   const [profile, setProfile]   = useState(null)
   const [history, setHistory]   = useState(() => getCVHistory())
   const [uploading, setUploading] = useState(false)
@@ -22,12 +22,15 @@ export default function CVPage() {
 
     if (res.status === 404 || !res.data?.data) {
       setProfile(null)
+      onActiveProfileChange?.('default')
       return null
     }
 
     setProfile(res.data.data)
     setUploaded(true)
-    setActiveSignature(profileSignature(res.data.data))
+    const signature = profileSignature(res.data.data)
+    setActiveSignature(signature)
+    onActiveProfileChange?.(signature)
     setHistory(saveCVSnapshot(res.data.data))
     return res.data.data
   }
@@ -67,7 +70,9 @@ export default function CVPage() {
       const profileData = res.data?.data?.profile
       if (profileData) {
         setProfile(profileData)
-        setActiveSignature(profileSignature(profileData))
+        const signature = profileSignature(profileData)
+        setActiveSignature(signature)
+        onActiveProfileChange?.(signature)
         setHistory(saveCVSnapshot(profileData, file.name))
       } else {
         await fetchProfile()
@@ -95,7 +100,9 @@ export default function CVPage() {
       const activeProfile = res.data?.data || item.profile
       setProfile(activeProfile)
       setUploaded(true)
-      setActiveSignature(profileSignature(activeProfile))
+      const signature = profileSignature(activeProfile)
+      setActiveSignature(signature)
+      onActiveProfileChange?.(signature)
       setHistory(saveCVSnapshot(activeProfile, item.filename || ''))
     } catch (err) {
       setError(err.response?.data?.error || 'Could not activate this CV. Please try again.')
@@ -136,11 +143,11 @@ export default function CVPage() {
         />
         <div className="upload-icon">{uploading ? '⏳' : uploaded ? '✅' : '📄'}</div>
         <div className="upload-text">
-          {uploading ? 'Parsing CV with Gemini...' :
+          {uploading ? 'Parsing CV and enriching your profile...' :
            uploaded  ? 'CV uploaded & parsed!' :
            'Drop your CV here or click to upload'}
         </div>
-        <div className="upload-sub">PDF only · Gemini will extract your skills profile</div>
+        <div className="upload-sub">PDF only · Our CV parser extracts your skills profile and uses Gemini to enrich the result</div>
       </div>
 
       {error && <div className="page-error">{error}</div>}
