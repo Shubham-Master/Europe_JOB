@@ -34,7 +34,7 @@ func Load() *Config {
 		AdzunaAppID:    getEnv("ADZUNA_APP_ID", ""),
 		AdzunaAppKey:   getEnv("ADZUNA_APP_KEY", ""),
 		SupabaseURL:    getEnv("SUPABASE_URL", ""),
-		SupabaseKey:    getEnv("SUPABASE_KEY", ""),
+		SupabaseKey:    getEnv("SUPABASE_SERVICE_ROLE_KEY", getEnv("SUPABASE_KEY", "")),
 		TelegramToken:  getEnv("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID: getEnv("TELEGRAM_CHAT_ID", ""),
 		PythonPath:     getEnv("PYTHON_PATH", "python3"),

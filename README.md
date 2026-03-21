@@ -41,6 +41,7 @@ Copy the env template:
 
 ```bash
 cp .env.example .env
+cp frontend/.env.example frontend/.env.local
 ```
 
 Required values in `.env`:
@@ -49,6 +50,15 @@ Required values in `.env`:
 GEMINI_API_KEY=your_real_key
 GEMINI_MODEL=gemini-2.5-flash-lite
 PYTHON_PATH=../venv/bin/python
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_backend_service_role_key
+```
+
+Required values in `frontend/.env.local`:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_frontend_anon_key
 ```
 
 Optional values:
@@ -58,9 +68,14 @@ ADZUNA_APP_ID=
 ADZUNA_APP_KEY=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-SUPABASE_URL=
-SUPABASE_KEY=
+VITE_API_BASE_URL=
 ```
+
+Google sign-in notes:
+
+- Enable the Google provider in Supabase Auth
+- Add your local and deployed frontend URLs to the Supabase redirect allow-list
+- Keep the service-role key on the backend only; never expose it in Vite env files
 
 ## Local Run
 

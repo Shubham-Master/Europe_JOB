@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from './auth/AuthContext.jsx'
+import AuthScreen from './components/AuthScreen.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import ScenicBackdrop from './components/ScenicBackdrop.jsx'
 import GuideBot from './components/GuideBot.jsx'
@@ -14,6 +16,7 @@ import './App.css'
 export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { canSignIn, error: authError, isAuthenticated, loading: authLoading, signInWithGoogle, signOut, user } = useAuth()
   const [selectedJob, setSelectedJob] = useState(() => loadSelectedJob())
   const [jobsCountry, setJobsCountry] = useState('All')
 
@@ -30,10 +33,26 @@ export default function App() {
     ? sceneForCountry(jobsCountry)
     : sceneForPath(location.pathname)
 
+  if (!isAuthenticated) {
+    return (
+      <div className="app auth-shell">
+        <ScenicBackdrop sceneKey={scenicKey} />
+        <main className="main auth-main">
+          <AuthScreen
+            canSignIn={canSignIn}
+            loading={authLoading}
+            error={authError}
+            onSignIn={signInWithGoogle}
+          />
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <ScenicBackdrop sceneKey={scenicKey} />
-      <Sidebar />
+      <Sidebar user={user} onSignOut={signOut} />
       <main className="main">
         <div className="content-shell">
           <Routes>

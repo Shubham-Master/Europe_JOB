@@ -36,21 +36,22 @@ func main() {
 
 	// API v1
 	v1 := r.Group("/api/v1")
+	v1.Use(middleware.RequireAuth(cfg))
 	{
 		// Jobs
 		jobs := v1.Group("/jobs")
 		{
-			jobs.GET("", h.GetJobs)           // GET  /api/v1/jobs?country=DE&min_score=70
-			jobs.GET("/:id", h.GetJob)         // GET  /api/v1/jobs/:id
+			jobs.GET("", h.GetJobs)              // GET  /api/v1/jobs?country=DE&min_score=70
+			jobs.GET("/:id", h.GetJob)           // GET  /api/v1/jobs/:id
 			jobs.PUT("/:id/seen", h.MarkJobSeen) // PUT  /api/v1/jobs/:id/seen
 		}
 
 		// CV
 		cv := v1.Group("/cv")
 		{
-			cv.POST("/parse", h.ParseCV)         // POST /api/v1/cv/parse (multipart)
+			cv.POST("/parse", h.ParseCV)            // POST /api/v1/cv/parse (multipart)
 			cv.POST("/activate", h.ActivateProfile) // POST /api/v1/cv/activate
-			cv.GET("/profile", h.GetProfile)     // GET  /api/v1/cv/profile
+			cv.GET("/profile", h.GetProfile)        // GET  /api/v1/cv/profile
 		}
 
 		// Cover Letter
@@ -60,7 +61,7 @@ func main() {
 		// Pipeline
 		pipeline := v1.Group("/pipeline")
 		{
-			pipeline.POST("/run", h.RunPipeline)        // POST /api/v1/pipeline/run
+			pipeline.POST("/run", h.RunPipeline)         // POST /api/v1/pipeline/run
 			pipeline.POST("/stop", h.StopPipeline)       // POST /api/v1/pipeline/stop
 			pipeline.POST("/restart", h.RestartPipeline) // POST /api/v1/pipeline/restart
 			pipeline.GET("/status", h.GetPipelineStatus) // GET  /api/v1/pipeline/status

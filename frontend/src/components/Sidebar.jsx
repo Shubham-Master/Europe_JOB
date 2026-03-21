@@ -9,7 +9,9 @@ const NAV = [
   { to: '/pipeline',     icon: '🔄', label: 'Pipeline' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ user, onSignOut }) {
+  const userEmail = user?.email || 'Signed in'
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -42,6 +44,20 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      <div className="sidebar-footer">
+        <div className="account-card">
+          <div className="account-avatar">
+            {(userEmail[0] || 'U').toUpperCase()}
+          </div>
+          <div className="account-copy">
+            <div className="account-label">Signed in</div>
+            <div className="account-email" title={userEmail}>{userEmail}</div>
+          </div>
+        </div>
+        <button type="button" className="signout-button" onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
     </aside>
   )
 }

@@ -5,12 +5,21 @@
   isolation: isolate;
 }
 
+.auth-shell {
+  display: block;
+}
+
 .main {
   position: relative;
   z-index: 2;
   flex: 1;
   margin-left: 236px;
   padding: 34px 36px 42px;
+}
+
+.auth-main {
+  margin-left: 0;
+  padding-inline: 24px;
 }
 
 .content-shell {

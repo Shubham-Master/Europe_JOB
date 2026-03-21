@@ -28,7 +28,7 @@ UPDATE public.cover_letters cl
 SET user_id = COALESCE(jm.user_id, cv.user_id)
 FROM public.job_matches jm
 JOIN public.cv_versions cv
-  ON cv.id = cl.cv_version_id
+  ON cv.id = jm.cv_version_id
 WHERE cl.job_match_id = jm.id
   AND cl.user_id IS NULL
   AND COALESCE(jm.user_id, cv.user_id) IS NOT NULL;
@@ -43,10 +43,10 @@ WHERE pr.cv_version_id = cv.id
 UPDATE public.jobs j
 SET user_id = derived.user_id
 FROM (
-  SELECT jm.job_id, max(jm.user_id) AS user_id
+  SELECT DISTINCT ON (jm.job_id) jm.job_id, jm.user_id
   FROM public.job_matches jm
   WHERE jm.user_id IS NOT NULL
-  GROUP BY jm.job_id
+  ORDER BY jm.job_id, jm.matched_at DESC, jm.id DESC
 ) AS derived
 WHERE j.id = derived.job_id
   AND j.user_id IS NULL;
