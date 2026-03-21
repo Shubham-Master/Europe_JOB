@@ -81,6 +81,7 @@ Supabase SQL setup:
 
 - Run [supabase/advisor_hardening_migration.sql](/Users/ankitakant/Desktop/Shubham/GIT/Europe_JOB/supabase/advisor_hardening_migration.sql) after the base schema to add per-user ownership, RLS, and user-scoped job uniqueness
 - Run [supabase/user_profiles_migration.sql](/Users/ankitakant/Desktop/Shubham/GIT/Europe_JOB/supabase/user_profiles_migration.sql) to enable the My Profile page and country targeting
+- If an existing deployment still throws Supabase `42P10` on jobs upsert, run [supabase/jobs_user_unique_index_fix.sql](/Users/ankitakant/Desktop/Shubham/GIT/Europe_JOB/supabase/jobs_user_unique_index_fix.sql) once to replace the old partial unique index with a full composite unique index
 
 ## Local Run
 

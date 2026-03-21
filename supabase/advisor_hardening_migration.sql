@@ -269,8 +269,7 @@ DROP INDEX IF EXISTS public.idx_pipeline_runs_status;
 ALTER TABLE public.jobs DROP CONSTRAINT IF EXISTS jobs_external_key_key;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_jobs_user_external_key
-  ON public.jobs (user_id, external_key)
-  WHERE user_id IS NOT NULL;
+  ON public.jobs (user_id, external_key);
 
 CREATE INDEX IF NOT EXISTS idx_jobs_user_country_posted_at
   ON public.jobs (user_id, country, posted_at DESC NULLS LAST);

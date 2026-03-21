@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -184,5 +185,15 @@ func TestResolvedCommandPathKeepsBinaryNameButResolvesRelativePaths(t *testing.T
 	}
 	if !strings.HasSuffix(got, filepath.Join("venv", "bin", "python")) {
 		t.Fatalf("expected resolved path to end with venv/bin/python, got %q", got)
+	}
+}
+
+func TestIsSupabaseConflictTargetError(t *testing.T) {
+	if !isSupabaseConflictTargetError(errors.New(`supabase POST jobs failed: {"code":"42P10","message":"there is no unique or exclusion constraint matching the ON CONFLICT specification"}`)) {
+		t.Fatalf("expected 42P10 on-conflict error to be detected")
+	}
+
+	if isSupabaseConflictTargetError(errors.New("some other error")) {
+		t.Fatalf("did not expect unrelated error to be detected as conflict-target error")
 	}
 }

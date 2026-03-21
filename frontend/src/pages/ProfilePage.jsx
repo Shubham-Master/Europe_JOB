@@ -51,6 +51,20 @@ export default function ProfilePage() {
     })
   }
 
+  const selectAllCountries = () => {
+    setForm((current) => ({
+      ...current,
+      target_countries: EUROPE_COUNTRY_OPTIONS.map((country) => country.code),
+    }))
+  }
+
+  const clearCountries = () => {
+    setForm((current) => ({
+      ...current,
+      target_countries: [],
+    }))
+  }
+
   const saveProfile = async () => {
     setSaving(true)
     setError('')
@@ -119,7 +133,15 @@ export default function ProfilePage() {
               <h2 className="panel-title">Target Countries</h2>
               <p className="panel-sub">These are the countries the job pipeline will scrape on your behalf.</p>
             </div>
-            <div className="country-count">{form.target_countries.length} selected</div>
+            <div className="country-tools">
+              <button type="button" className="country-tool-button" onClick={selectAllCountries}>
+                Select all
+              </button>
+              <button type="button" className="country-tool-button secondary" onClick={clearCountries}>
+                Clear all
+              </button>
+              <div className="country-count">{form.target_countries.length} selected</div>
+            </div>
           </div>
 
           <div className="country-grid">

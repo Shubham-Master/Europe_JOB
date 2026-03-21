@@ -881,6 +881,10 @@ func runPipelineAsync(userID string, cfg *config.Config, supabaseStore *store.Su
 
 	if supabaseStore != nil && supabaseStore.Enabled() {
 		if err := supabaseStore.SyncJobsAndMatches(userID, cvVersionID, rawJobs, matchedJobs); err != nil {
+			if isSupabaseConflictTargetError(err) {
+				failPipeline(&state, startedAt, "Supabase jobs upsert is missing the final composite unique index. Run supabase/jobs_user_unique_index_fix.sql in Supabase SQL Editor, then retry.", supabaseStore, userID, pipelineRunID)
+				return
+			}
 			failPipeline(&state, startedAt, "Could not persist jobs to Supabase: "+err.Error(), supabaseStore, userID, pipelineRunID)
 			return
 		}
@@ -1430,6 +1434,16 @@ func isMissingUserProfilesStorage(err error) bool {
 		(strings.Contains(message, "does not exist") ||
 			strings.Contains(message, "could not find the table") ||
 			strings.Contains(message, "schema cache"))
+}
+
+func isSupabaseConflictTargetError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "42p10") &&
+		strings.Contains(message, "on conflict")
 }
 
 func sanitizeFileComponent(value string) string {

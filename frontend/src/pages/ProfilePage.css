@@ -67,6 +67,14 @@
   gap: 12px;
 }
 
+.country-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .panel-title {
   font-size: 18px;
   font-weight: 700;
@@ -85,6 +93,22 @@
   color: var(--accent2);
   font-size: 12px;
   font-family: var(--mono);
+}
+
+.country-tool-button {
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(121, 237, 255, 0.08);
+  color: var(--accent2);
+  border: 1px solid rgba(121, 237, 255, 0.18);
+}
+
+.country-tool-button.secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text2);
+  border-color: var(--border);
 }
 
 .profile-form {
@@ -196,6 +220,10 @@
 
   .country-grid {
     grid-template-columns: 1fr;
+  }
+
+  .country-tools {
+    justify-content: flex-start;
   }
 
   .profile-page {
