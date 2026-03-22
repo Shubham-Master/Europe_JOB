@@ -1,17 +1,18 @@
 """
 Cover Letter Generator — Europe Job Hunter
-Generates personalized cover letters and tailored CV bullets using Gemini.
+Generates personalized cover letters and tailored CV bullets.
 
-User Preferences:
-- Length  : ~200 words
-- Tone    : AI decides per job (startup vs corporate)
-- Includes: Why this company + Skills match + Relocation willingness
+Modes:
+- draft: deterministic, fast, no Gemini call
+- ai: uses Gemini with optional tone/length/focus settings
 """
 
 import json
 import os
+import re
 import sys
-from datetime import datetime
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -25,14 +26,173 @@ DEFAULT_JOBS_PATH = PROJECT_ROOT / "data" / "jobs_matched.json"
 DEFAULT_PROFILE_PATH = PROJECT_ROOT / "data" / "profile.json"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data" / "applications"
 
+DEFAULT_PREFERENCES = {
+    "tone": "adaptive",
+    "length": "medium",
+    "focus": "skills match",
+    "notes": "",
+}
+
+LENGTH_GUIDANCE = {
+    "short": "140-180 words",
+    "medium": "200-260 words",
+    "detailed": "280-360 words",
+}
+
+FOCUS_GUIDANCE = {
+    "skills match": "Emphasize the strongest overlap between the candidate profile and the job requirements.",
+    "achievements": "Lead with measurable achievements and business impact that fit the role.",
+    "motivation": "Explain why the role and company are a strong fit without sounding generic.",
+    "leadership": "Highlight ownership, collaboration, mentoring, and stakeholder alignment.",
+}
+
+STOPWORDS = {
+    "about", "after", "also", "analysis", "analyst", "and", "are", "build", "building", "candidate",
+    "company", "cross", "deliver", "delivery", "engineer", "engineering", "experience", "for", "from",
+    "have", "help", "high", "ideal", "into", "job", "jobs", "join", "location", "looking", "manage",
+    "management", "more", "must", "needs", "our", "partner", "platform", "product", "projects",
+    "provide", "relevant", "requirements", "role", "scale", "senior", "skills", "strong", "success",
+    "support", "team", "their", "this", "through", "using", "with", "work", "working", "you", "your",
+}
+
 
 def call_gemini(prompt: str, max_tokens: int = 1500, temperature: float = 0.35) -> str:
     """Call Gemini API and return text response."""
     return generate_text(prompt, max_tokens=max_tokens, temperature=temperature)
 
 
-def generate_cover_letter(job: dict, profile: dict) -> str:
-    """Generate a personalized ~200 word cover letter for a specific job."""
+def normalize_preferences(preferences: dict | None) -> dict:
+    payload = dict(DEFAULT_PREFERENCES)
+    if isinstance(preferences, dict):
+        for key in payload:
+            value = preferences.get(key)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                payload[key] = text
+    return payload
+
+
+def collect_profile_terms(profile: dict) -> list[str]:
+    raw_terms = []
+    for key in ("technical_skills", "programming_languages", "frameworks_and_tools", "domains", "target_roles"):
+        value = profile.get(key, [])
+        if isinstance(value, list):
+            raw_terms.extend(str(item).strip() for item in value if str(item).strip())
+    current_title = str(profile.get("current_title", "")).strip()
+    if current_title:
+        raw_terms.append(current_title)
+
+    deduped = []
+    seen = set()
+    for item in raw_terms:
+        lowered = item.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        deduped.append(item)
+    return deduped
+
+
+def find_matching_profile_terms(job: dict, profile: dict) -> list[str]:
+    job_text = " ".join([
+        str(job.get("title", "")),
+        str(job.get("description", "")),
+        str(job.get("company", "")),
+    ]).lower()
+    matches = []
+    for term in collect_profile_terms(profile):
+        lowered = term.lower()
+        if lowered and lowered in job_text:
+            matches.append(term)
+    return matches[:6]
+
+
+def extract_priority_terms(job: dict) -> list[str]:
+    text = " ".join([
+        str(job.get("title", "")),
+        str(job.get("description", "")),
+    ])
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9+#./-]{2,}", text)
+    counts = Counter()
+    for token in tokens:
+        lowered = token.lower()
+        if lowered in STOPWORDS:
+            continue
+        counts[lowered] += 1
+    return [token for token, _ in counts.most_common(12)]
+
+
+def build_tailoring_draft(job: dict, profile: dict) -> dict:
+    matched_terms = find_matching_profile_terms(job, profile)
+    profile_blob = " ".join(collect_profile_terms(profile)).lower()
+    priority_terms = extract_priority_terms(job)
+    missing_skills = [term for term in priority_terms if term not in profile_blob][:4]
+
+    current_title = profile.get("current_title") or "recent work"
+    target_role = job.get("title") or "this role"
+    years = profile.get("years_of_experience") or ""
+    years_prefix = f"{years}+ years" if years else "recent"
+
+    bullets = []
+    if matched_terms:
+        bullets.append(
+            f"Rework one bullet to show how you used {', '.join(matched_terms[:2])} in {years_prefix} {current_title} work with measurable outcomes."
+        )
+        bullets.append(
+            f"Highlight a project that maps directly to {target_role}, especially where you improved delivery speed, reliability, or stakeholder confidence."
+        )
+        if len(matched_terms) > 2:
+            bullets.append(
+                f"Add a bullet that connects {', '.join(matched_terms[2:4])} to the priorities in this job description."
+            )
+    else:
+        bullets.append(f"Lead with the most relevant example from your {current_title} experience for {target_role}.")
+        bullets.append("Make every bullet outcome-focused and tie it to delivery, ownership, and collaboration.")
+
+    keywords_to_add = matched_terms[:5] or priority_terms[:5]
+
+    return {
+        "tailored_bullets": bullets[:5],
+        "missing_skills": missing_skills,
+        "keywords_to_add": keywords_to_add,
+        "ats_score_estimate": 0,
+    }
+
+
+def generate_cover_letter_draft(job: dict, profile: dict, tailoring: dict | None = None) -> str:
+    tailoring = tailoring or build_tailoring_draft(job, profile)
+    matched_terms = tailoring.get("keywords_to_add", [])
+
+    name = profile.get("full_name", "Candidate")
+    current_title = profile.get("current_title", "my current role")
+    years = profile.get("years_of_experience")
+    company = job.get("company", "your team")
+    title = job.get("title", "this role")
+    location = job.get("location") or job.get("country") or "Europe"
+    target_roles = [str(item).strip() for item in profile.get("target_roles", []) if str(item).strip()]
+    role_phrase = target_roles[0] if target_roles else current_title
+    skill_phrase = ", ".join(matched_terms[:4]) if matched_terms else "relevant technical and delivery strengths"
+
+    years_sentence = f" Over the last {years} years," if years else ""
+
+    paragraphs = [
+        f"Dear Hiring Team,\n\nI am excited to be considered for the {title} role at {company}.{years_sentence} I have built my work around {role_phrase}, and this opportunity stands out because it lines up closely with the kind of problems I have been solving and the direction I want to keep growing in.",
+        f"What makes this role a strong fit is the overlap between your needs and my background in {skill_phrase}. Based on the job description, I would focus this application on examples where I improved delivery quality, handled cross-functional ownership, and turned complex requirements into reliable outcomes that teams could trust.",
+        f"I would use this draft to keep the letter concise, specific, and honest, with clear evidence from my actual work instead of generic claims. I am open to opportunities aligned with {location}, and I would welcome the chance to discuss how my experience could support {company}'s goals.\n\nBest regards,\n{name}",
+    ]
+
+    return "\n\n".join(paragraphs)
+
+
+def generate_cover_letter(job: dict, profile: dict, preferences: dict | None = None) -> str:
+    """Generate a personalized cover letter for a specific job."""
+    preferences = normalize_preferences(preferences)
+    length_target = LENGTH_GUIDANCE.get(preferences["length"].lower(), LENGTH_GUIDANCE["medium"])
+    focus_instruction = FOCUS_GUIDANCE.get(preferences["focus"].lower(), FOCUS_GUIDANCE["skills match"])
+    notes = preferences.get("notes", "")
+    notes_instruction = f"\nADDITIONAL USER NOTES:\n- {notes}" if notes else ""
 
     prompt = f"""You are an expert cover letter writer. Write a compelling cover letter for this job.
 
@@ -51,13 +211,15 @@ JOB DETAILS:
 - Company: {job.get('company', '')}
 - Location: {job.get('location', '')}
 - Description: {job.get('description', '')[:1000]}
+ 
+USER PREFERENCES:
+- Tone: {preferences.get('tone', 'adaptive')}
+- Length target: {length_target}
+- Focus: {focus_instruction}{notes_instruction}
 
 STRICT INSTRUCTIONS:
-1. LENGTH: Exactly ~200 words. Not more, not less.
-2. TONE: Analyze the job and company — adapt accordingly:
-   - Startup / tech-forward → Friendly & Confident
-   - Bank / enterprise / corporate → Professional & Formal  
-   - Creative agency → Conversational & Direct
+1. LENGTH: Stay within {length_target}.
+2. TONE: Follow the requested tone, but keep it professional and believable.
 3. STRUCTURE (3 short paragraphs):
    Para 1 — Why THIS company specifically (show research, mention something specific)
    Para 2 — Top 2-3 skills that directly match the JD (be specific, use numbers if possible)
@@ -72,8 +234,10 @@ Write the cover letter now:"""
     return call_gemini(prompt, max_tokens=600, temperature=0.5)
 
 
-def tailor_cv_bullets(job: dict, profile: dict) -> dict:
+def tailor_cv_bullets(job: dict, profile: dict, use_ai: bool = True) -> dict:
     """Rewrite CV bullets to match the job description (ATS-friendly)."""
+    if not use_ai:
+        return build_tailoring_draft(job, profile)
 
     work_experience = profile.get("work_experience", [])
     exp_text = ""
@@ -122,6 +286,22 @@ def normalize_tailoring_result(data: dict) -> dict:
 
 def generate_application(job: dict, profile: dict, output_dir: str | None = str(DEFAULT_OUTPUT_DIR)) -> dict:
     """Generate full application package: cover letter + tailored CV bullets."""
+    return generate_application_with_mode(job, profile, output_dir=output_dir, mode="ai", preferences=None)
+
+
+def generate_application_with_mode(
+    job: dict,
+    profile: dict,
+    output_dir: str | None = str(DEFAULT_OUTPUT_DIR),
+    mode: str = "ai",
+    preferences: dict | None = None,
+) -> dict:
+    """Generate a draft or AI application package."""
+    normalized_mode = (mode or "ai").strip().lower()
+    if normalized_mode not in {"ai", "draft"}:
+        raise ValueError("mode must be 'ai' or 'draft'")
+
+    preferences = normalize_preferences(preferences)
 
     company = job.get("company", "unknown").replace(" ", "_").lower()
     title   = job.get("title", "job").replace(" ", "_").lower()[:30]
@@ -130,11 +310,15 @@ def generate_application(job: dict, profile: dict, output_dir: str | None = str(
 
     print(f"\n✍️  Generating: {job.get('title')} @ {job.get('company')}  [{job.get('match_score', 0)}%]")
 
-    print("   📝 Writing cover letter (~200 words)...")
-    cover_letter = generate_cover_letter(job, profile)
-
-    print("   🎯 Tailoring CV bullets...")
-    cv_data = tailor_cv_bullets(job, profile)
+    if normalized_mode == "draft":
+        print("   📝 Building instant draft...")
+        cv_data = tailor_cv_bullets(job, profile, use_ai=False)
+        cover_letter = generate_cover_letter_draft(job, profile, cv_data)
+    else:
+        print("   📝 Writing cover letter with Gemini...")
+        cover_letter = generate_cover_letter(job, profile, preferences)
+        print("   🎯 Tailoring CV bullets...")
+        cv_data = tailor_cv_bullets(job, profile, use_ai=True)
 
     package = {
         "job": {
@@ -150,7 +334,9 @@ def generate_application(job: dict, profile: dict, output_dir: str | None = str(
         "missing_skills":     cv_data.get("missing_skills", []),
         "keywords_to_add":    cv_data.get("keywords_to_add", []),
         "ats_score_estimate": cv_data.get("ats_score_estimate", 0),
-        "generated_at":       datetime.utcnow().isoformat(),
+        "generation_mode":    normalized_mode,
+        "generation_preferences": preferences,
+        "generated_at":       datetime.now(timezone.utc).isoformat(),
     }
 
     if output_dir is None:
@@ -219,7 +405,21 @@ def process_top_jobs(
             print(f"     ⚠️  Missing skills: {', '.join(r['missing_skills'][:3])}")
 
 
-def process_single_job(job_path: str, profile_path: str, output_path: str) -> dict:
+def load_preferences(path: str | None) -> dict:
+    if not path:
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    return data if isinstance(data, dict) else {}
+
+
+def process_single_job(
+    job_path: str,
+    profile_path: str,
+    output_path: str,
+    mode: str = "ai",
+    settings_path: str | None = None,
+) -> dict:
     """Generate a single application package and save it as JSON."""
     for path in [job_path, profile_path]:
         if not os.path.exists(path):
@@ -231,7 +431,13 @@ def process_single_job(job_path: str, profile_path: str, output_path: str) -> di
     with open(profile_path, encoding="utf-8") as f:
         profile = json.load(f)
 
-    package = generate_application(job, profile, output_dir=None)
+    package = generate_application_with_mode(
+        job,
+        profile,
+        output_dir=None,
+        mode=mode,
+        preferences=load_preferences(settings_path),
+    )
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(package, f, indent=2, ensure_ascii=False)
@@ -243,9 +449,27 @@ def process_single_job(job_path: str, profile_path: str, output_path: str) -> di
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--single":
         if len(sys.argv) < 5:
-            print("Usage: python ai_tools/cover_letter.py --single <job.json> <profile.json> <output.json>")
+            print("Usage: python ai_tools/cover_letter.py --single <job.json> <profile.json> <output.json> [--mode draft|ai] [--settings settings.json]")
             sys.exit(1)
-        process_single_job(sys.argv[2], sys.argv[3], sys.argv[4])
+        job_path = sys.argv[2]
+        profile_path = sys.argv[3]
+        output_path = sys.argv[4]
+        mode = "ai"
+        settings_path = None
+        index = 5
+        while index < len(sys.argv):
+            arg = sys.argv[index]
+            if arg == "--mode" and index+1 < len(sys.argv):
+                mode = sys.argv[index+1]
+                index += 2
+                continue
+            if arg == "--settings" and index+1 < len(sys.argv):
+                settings_path = sys.argv[index+1]
+                index += 2
+                continue
+            print("Usage: python ai_tools/cover_letter.py --single <job.json> <profile.json> <output.json> [--mode draft|ai] [--settings settings.json]")
+            sys.exit(1)
+        process_single_job(job_path, profile_path, output_path, mode=mode, settings_path=settings_path)
         sys.exit(0)
 
     jobs_path    = sys.argv[1] if len(sys.argv) > 1 else str(DEFAULT_JOBS_PATH)

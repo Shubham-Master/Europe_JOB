@@ -67,6 +67,7 @@ export default function App() {
     setSelectedJob({
       ...job,
       cv_signature: activeCVSignature,
+      cover_letter_request_id: Date.now(),
     })
     navigate('/cover-letter')
   }
@@ -105,7 +106,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/jobs" replace />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/jobs" element={<JobsPage onJobSelect={handleJobSelect} onSceneChange={setJobsCountry} />} />
-            <Route path="/cover-letter" element={<CoverLetterPage job={selectedJob} />} />
+            <Route path="/cover-letter" element={<CoverLetterPage job={selectedJob} onJobChange={setSelectedJob} />} />
             <Route path="/pipeline" element={<PipelinePage />} />
             <Route path="/cv" element={<CVPage onActiveProfileChange={setActiveCVSignature} />} />
             <Route path="*" element={<Navigate to="/jobs" replace />} />

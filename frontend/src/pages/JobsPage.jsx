@@ -92,7 +92,29 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
   }
 
   const countries = ['All', ...new Set(jobs.map(job => job.country).filter(Boolean))]
-  const sources = ['All', ...new Set(jobs.map(job => job.source).filter(Boolean))]
+  const sourceScopedJobs = jobs.filter(job => {
+    if (country !== 'All' && job.country !== country) return false
+    if (savedOnly && !job.saved) return false
+    if (job.match_score < minScore) return false
+    if (search &&
+        !job.title.toLowerCase().includes(search.toLowerCase()) &&
+        !job.company.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+  const sourceOptions = [
+    { value: 'All', label: `All (${sourceScopedJobs.length})` },
+    ...buildSourceBreakdown(sourceScopedJobs).map((item) => ({
+      value: item.source,
+      label: `${item.label} (${item.count})`,
+    })),
+  ]
+
+  useEffect(() => {
+    if (source === 'All') return
+    if (!sourceOptions.some((item) => item.value === source)) {
+      setSource('All')
+    }
+  }, [source, sourceOptions])
 
   const baseFiltered = jobs.filter(job => {
     if (country !== 'All' && job.country !== country) return false
@@ -119,7 +141,6 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
     unseen: jobs.filter(job => !job.seen).length,
     saved: jobs.filter(job => job.saved).length,
   }
-  const sourceBreakdown = buildSourceBreakdown(baseFiltered)
 
   return (
     <div className="jobs-page">
@@ -148,7 +169,9 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
           {countries.map(item => <option key={item}>{item}</option>)}
         </select>
         <select className="filter-select" value={source} onChange={e => setSource(e.target.value)}>
-          {sources.map(item => <option key={item}>{item}</option>)}
+          {sourceOptions.map((item) => (
+            <option key={item.value} value={item.value}>{item.label}</option>
+          ))}
         </select>
         <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
           <option value="score">Best Match</option>
@@ -182,22 +205,6 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
       </div>
 
       {error && <div className="page-error">{error}</div>}
-
-      {!loading && sourceBreakdown.length > 0 && (
-        <div className="source-mix-card">
-          <div>
-            <div className="source-mix-title">Source Mix</div>
-            <div className="source-mix-sub">Current filtered inventory before geo-risk hiding.</div>
-          </div>
-          <div className="source-mix-chips">
-            {sourceBreakdown.map((item) => (
-              <span key={item.source} className="source-mix-chip">
-                {item.label} <strong>{item.count}</strong>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="jobs-list">
         {loading && (
@@ -247,7 +254,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
               </button>
               {isLikelyGeoLocked(job) && (
                 <div className="job-warning">
-                  This Adzuna detail page may be geo-restricted. If it blocks you, use the company-careers search fallback.
+                  This detail page may be geo-restricted. If it blocks you, use the company careers search fallback.
                 </div>
               )}
             </div>
@@ -257,7 +264,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
               </button>
               {isLikelyGeoLocked(job) && (
                 <button className="btn-ghost" onClick={() => searchCompanyCareers(job)}>
-                  Find via Google
+                  Find Company Careers
                 </button>
               )}
               <button className="btn-primary" onClick={() => selectJob(job)}>

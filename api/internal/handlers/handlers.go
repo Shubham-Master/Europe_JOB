@@ -535,7 +535,16 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 		return
 	}
 
-	if h.cfg.GeminiKey == "" {
+	generationMode := normalizeCoverLetterMode(req.GenerationMode)
+	if generationMode == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error:   "generation_mode must be either draft or ai",
+		})
+		return
+	}
+
+	if generationMode == "ai" && h.cfg.GeminiKey == "" {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Error:   "GEMINI_API_KEY is missing. Add it to your .env before generating cover letters.",
@@ -572,6 +581,20 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 	}
 	defer os.Remove(jobPath)
 
+	preferences := buildCoverLetterPreferences(req)
+	settingsPath := ""
+	if len(preferences) > 0 {
+		settingsPath, err = writeTempJSON(preferences)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "failed to prepare cover letter settings",
+			})
+			return
+		}
+		defer os.Remove(settingsPath)
+	}
+
 	outputFile, err := os.CreateTemp("", "cover-letter-result-*.json")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -584,14 +607,20 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 	outputFile.Close()
 	defer os.Remove(outputPath)
 
-	cmd := exec.Command(
-		resolvedCommandPath(h.cfg.PythonPath),
+	args := []string{
 		"../ai_tools/cover_letter.py",
 		"--single",
 		jobPath,
 		profilePath,
 		outputPath,
-	)
+		"--mode",
+		generationMode,
+	}
+	if settingsPath != "" {
+		args = append(args, "--settings", settingsPath)
+	}
+
+	cmd := exec.Command(resolvedCommandPath(h.cfg.PythonPath), args...)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
@@ -625,7 +654,7 @@ func (h *Handler) GenerateCoverLetter(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Message: "Cover letter generated successfully",
+		Message: coverLetterSuccessMessage(generationMode),
 		Data:    data,
 	})
 }
@@ -1098,6 +1127,43 @@ func (h *Handler) buildJobPayload(userID string, req models.CoverLetterRequest) 
 	}
 
 	return job
+}
+
+func normalizeCoverLetterMode(raw string) string {
+	mode := strings.ToLower(strings.TrimSpace(raw))
+	if mode == "" {
+		return "ai"
+	}
+	if mode == "ai" || mode == "draft" {
+		return mode
+	}
+	return ""
+}
+
+func buildCoverLetterPreferences(req models.CoverLetterRequest) map[string]string {
+	preferences := map[string]string{}
+
+	if tone := strings.TrimSpace(req.Tone); tone != "" {
+		preferences["tone"] = tone
+	}
+	if length := strings.TrimSpace(req.Length); length != "" {
+		preferences["length"] = length
+	}
+	if focus := strings.TrimSpace(req.Focus); focus != "" {
+		preferences["focus"] = focus
+	}
+	if notes := strings.TrimSpace(req.Notes); notes != "" {
+		preferences["notes"] = notes
+	}
+
+	return preferences
+}
+
+func coverLetterSuccessMessage(mode string) string {
+	if mode == "draft" {
+		return "Cover letter draft generated successfully"
+	}
+	return "Cover letter generated successfully"
 }
 
 func findJobByID(id string) (models.Job, bool) {

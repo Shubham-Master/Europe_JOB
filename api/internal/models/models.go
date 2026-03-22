@@ -48,13 +48,18 @@ type Language struct {
 
 // CoverLetterRequest is the input for cover letter generation
 type CoverLetterRequest struct {
-	JobID      string  `json:"job_id" binding:"required"`
-	JobTitle   string  `json:"job_title"`
-	Company    string  `json:"company"`
-	Location   string  `json:"location"`
-	JobURL     string  `json:"job_url"`
-	JobDesc    string  `json:"job_description"`
-	MatchScore float64 `json:"match_score"`
+	JobID          string  `json:"job_id" binding:"required"`
+	JobTitle       string  `json:"job_title"`
+	Company        string  `json:"company"`
+	Location       string  `json:"location"`
+	JobURL         string  `json:"job_url"`
+	JobDesc        string  `json:"job_description"`
+	MatchScore     float64 `json:"match_score"`
+	GenerationMode string  `json:"generation_mode"`
+	Tone           string  `json:"tone"`
+	Length         string  `json:"length"`
+	Focus          string  `json:"focus"`
+	Notes          string  `json:"notes"`
 }
 
 // CoverLetterResponse is the output from cover letter generation

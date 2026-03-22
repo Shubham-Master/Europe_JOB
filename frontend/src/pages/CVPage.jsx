@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
 import { getCVHistory, profileSignature, saveCVSnapshot } from '../lib/storage'
 import './CVPage.css'
@@ -14,6 +15,7 @@ export default function CVPage({ onActiveProfileChange }) {
   const [activatingSignature, setActivatingSignature] = useState('')
   const [activeSignature, setActiveSignature] = useState('')
   const fileRef = useRef()
+  const navigate = useNavigate()
 
   const fetchProfile = async () => {
     const res = await api.get('/api/v1/cv/profile', {
@@ -124,6 +126,15 @@ export default function CVPage({ onActiveProfileChange }) {
           <h1 className="page-title">My CV</h1>
           <p className="page-sub">Upload your CV to update your job matching profile</p>
         </div>
+        {(profile || history.length > 0) && (
+          <button
+            type="button"
+            className="cv-pipeline-btn"
+            onClick={() => navigate('/pipeline')}
+          >
+            ▶ Run Pipeline
+          </button>
+        )}
       </div>
 
       {/* Upload Zone */}

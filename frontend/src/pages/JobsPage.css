@@ -124,50 +124,6 @@ input[type="range"] {
   width: 100px;
 }
 
-.source-mix-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 16px 18px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.018)), var(--bg2);
-  backdrop-filter: blur(16px);
-  box-shadow: var(--shadow);
-}
-
-.source-mix-title {
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.source-mix-sub {
-  margin-top: 4px;
-  color: var(--text3);
-  font-size: 12px;
-}
-
-.source-mix-chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.source-mix-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 11px;
-  border-radius: 999px;
-  border: 1px solid rgba(121, 237, 255, 0.18);
-  background: rgba(121, 237, 255, 0.06);
-  color: var(--accent2);
-  font-size: 12px;
-}
-
 /* Job Cards */
 .jobs-list { display: flex; flex-direction: column; gap: 10px; }
 

@@ -3,6 +3,13 @@ import api from '../lib/api'
 import { getCoverLetterHistory, getLatestCoverLetter, saveCoverLetterResult } from '../lib/storage'
 import './CoverLetterPage.css'
 
+const DEFAULT_AI_SETTINGS = {
+  tone: 'confident',
+  length: 'medium',
+  focus: 'skills match',
+  notes: '',
+}
+
 function buildCVDraft(result) {
   if (!result) return ''
 
@@ -23,7 +30,7 @@ function buildCVDraft(result) {
     missing.length > 0
       ? `ONLY ADD IF TRUE IN YOUR EXPERIENCE\n${missing.map((skill) => `- ${skill}`).join('\n')}`
       : '',
-    'FINAL CHECK\nKeep every line truthful. Quantify outcomes where you can, and remove any bullet that does not match your real work.'
+    'FINAL CHECK\nKeep every line truthful. Quantify outcomes where you can, and remove any bullet that does not match your real work.',
   ].filter(Boolean)
 
   return sections.join('\n\n')
@@ -146,29 +153,62 @@ function normalizeCoverLetterError(err) {
   return raw || 'Could not generate the cover letter. Please upload your CV and check the API key.'
 }
 
-export default function CoverLetterPage({ job }) {
-  const [result, setResult]             = useState(null)
-  const [history, setHistory]           = useState(() => getCoverLetterHistory())
-  const [loading, setLoading]           = useState(false)
-  const [error, setError]               = useState('')
-  const [copied, setCopied]             = useState(false)
-  const [cvDraft, setCvDraft]           = useState('')
-  const [activeTab, setActiveTab]       = useState('letter')
+function buildCoverLetterPayload(job, extras = {}) {
+  return {
+    job_id: job.id,
+    job_title: job.title,
+    company: job.company,
+    location: job.location,
+    job_url: job.url,
+    job_description: job.description || '',
+    match_score: job.match_score || 0,
+    ...extras,
+  }
+}
+
+function generationModeLabel(mode) {
+  return mode === 'ai' ? 'AI version' : 'Draft ready'
+}
+
+export default function CoverLetterPage({ job, onJobChange }) {
+  const [result, setResult] = useState(null)
+  const [history, setHistory] = useState(() => getCoverLetterHistory())
+  const [loading, setLoading] = useState(false)
+  const [loadingAction, setLoadingAction] = useState('')
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [cvDraft, setCvDraft] = useState('')
+  const [activeTab, setActiveTab] = useState('letter')
+  const [showAISettings, setShowAISettings] = useState(false)
+  const [aiSettings, setAiSettings] = useState(DEFAULT_AI_SETTINGS)
 
   useEffect(() => {
     const items = getCoverLetterHistory()
     setHistory(items)
 
-    if (job?.id) {
-      const saved = getLatestCoverLetter(job.id)
-      setResult(saved)
-      setCvDraft(saved ? buildCVDraft(saved) : '')
+    if (!job?.id) {
+      setResult(null)
+      setCvDraft('')
+      setActiveTab('letter')
       return
     }
 
-    setResult(null)
-    setCvDraft('')
-  }, [job])
+    const saved = getLatestCoverLetter(job.id)
+    setResult(saved)
+    setCvDraft(saved ? buildCVDraft(saved) : '')
+    setActiveTab('letter')
+  }, [job?.id])
+
+  const consumePendingRequest = () => {
+    if (!job?.cover_letter_request_id || !onJobChange) return
+    onJobChange((current) => {
+      if (!current || current.id !== job.id) return current
+      return {
+        ...current,
+        cover_letter_request_id: null,
+      }
+    })
+  }
 
   const hydrateResult = (payload) => {
     const safeJob = payload?.job || (job ? {
@@ -186,33 +226,69 @@ export default function CoverLetterPage({ job }) {
       tailored_bullets: Array.isArray(payload?.tailored_bullets) ? payload.tailored_bullets : [],
       missing_skills: Array.isArray(payload?.missing_skills) ? payload.missing_skills : [],
       keywords_to_add: Array.isArray(payload?.keywords_to_add) ? payload.keywords_to_add : [],
+      generation_mode: payload?.generation_mode || 'draft',
+      generation_preferences: payload?.generation_preferences || {},
     }
   }
 
-  const generate = async () => {
+  const applyResult = (payload) => {
+    const next = hydrateResult(payload)
+    setResult(next)
+    setCvDraft(buildCVDraft(next))
+    setHistory(saveCoverLetterResult(next))
+    setActiveTab('letter')
+  }
+
+  const generateDraft = async ({ consume = false } = {}) => {
     if (!job) return
+
     setLoading(true)
+    setLoadingAction('draft')
     setError('')
+
     try {
-      const res = await api.post('/api/v1/cover-letter', {
-        job_id: job.id,
-        job_title: job.title,
-        company: job.company,
-        location: job.location,
-        job_url: job.url,
-        job_description: job.description || '',
-        match_score: job.match_score || 0,
-      })
-      const next = hydrateResult(res.data.data || {})
-      setResult(next)
-      setCvDraft(buildCVDraft(next))
-      setHistory(saveCoverLetterResult(next))
-      setActiveTab('letter')
+      const res = await api.post('/api/v1/cover-letter', buildCoverLetterPayload(job, {
+        generation_mode: 'draft',
+      }))
+      applyResult(res.data.data || {})
     } catch (err) {
       setError(normalizeCoverLetterError(err))
+    } finally {
+      if (consume) consumePendingRequest()
+      setLoading(false)
+      setLoadingAction('')
     }
-    setLoading(false)
   }
+
+  const generateWithAI = async () => {
+    if (!job) return
+
+    setLoading(true)
+    setLoadingAction('ai')
+    setError('')
+
+    try {
+      const res = await api.post('/api/v1/cover-letter', buildCoverLetterPayload(job, {
+        generation_mode: 'ai',
+        tone: aiSettings.tone,
+        length: aiSettings.length,
+        focus: aiSettings.focus,
+        notes: aiSettings.notes,
+      }))
+      applyResult(res.data.data || {})
+      setShowAISettings(false)
+    } catch (err) {
+      setError(normalizeCoverLetterError(err))
+    } finally {
+      setLoading(false)
+      setLoadingAction('')
+    }
+  }
+
+  useEffect(() => {
+    if (!job?.id || !job?.cover_letter_request_id) return
+    generateDraft({ consume: true })
+  }, [job?.cover_letter_request_id, job?.id])
 
   const copy = () => {
     const textToCopy = activeTab === 'draft' ? cvDraft : result?.cover_letter
@@ -228,6 +304,7 @@ export default function CoverLetterPage({ job }) {
     if (!content) return
 
     const title = isDraft ? 'Tailored CV Draft' : 'Cover Letter'
+    const activeJob = job || result?.job
     const subtitle = activeJob
       ? `${activeJob.title || 'Selected role'}${activeJob.company ? ` @ ${activeJob.company}` : ''}`
       : 'EuroJobs export'
@@ -243,10 +320,10 @@ export default function CoverLetterPage({ job }) {
   const coverLetterText = result?.cover_letter || ''
   const wordCount = coverLetterText.trim() ? coverLetterText.trim().split(/\s+/).length : 0
   const draftWordCount = cvDraft.trim() ? cvDraft.trim().split(/\s+/).length : 0
+  const generationMode = result?.generation_mode || 'draft'
 
   return (
     <div className="cl-page">
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Cover Letter</h1>
@@ -254,18 +331,19 @@ export default function CoverLetterPage({ job }) {
             {activeJob ? `${activeJob.title} @ ${activeJob.company} · ${activeJob.match_score || 0}% match` : 'Select a job from Jobs tab'}
           </p>
         </div>
-        {job && !generated && (
-          <button className="btn-primary-lg" onClick={generate} disabled={loading}>
-            {loading ? '⏳ Generating...' : '✨ Generate with AI'}
+
+        {activeJob && !generated && (
+          <button className="btn-primary-lg" onClick={() => generateDraft()} disabled={loading}>
+            {loading && loadingAction === 'draft' ? '⏳ Building draft...' : '✍️ Generate Cover Letter'}
           </button>
         )}
+
         {generated && (
           <div className="action-row">
-            {job && (
-              <button className="btn-ghost-sm" onClick={generate} disabled={loading}>
-                🔄 Regenerate
-              </button>
-            )}
+            <span className={`generation-pill ${generationMode}`}>{generationModeLabel(generationMode)}</span>
+            <button className="btn-ghost-sm" onClick={() => setShowAISettings(true)} disabled={loading}>
+              {loading && loadingAction === 'ai' ? '⏳ Regenerating...' : '✨ Regenerate with AI'}
+            </button>
             <button className="btn-ghost-sm" onClick={copy}>
               {copied ? '✅ Copied!' : '📋 Copy'}
             </button>
@@ -311,7 +389,6 @@ export default function CoverLetterPage({ job }) {
 
       {generated && (
         <>
-          {/* Tabs */}
           <div className="tabs">
             <button className={`tab ${activeTab === 'letter' ? 'active' : ''}`} onClick={() => setActiveTab('letter')}>
               📝 Cover Letter
@@ -326,7 +403,6 @@ export default function CoverLetterPage({ job }) {
             )}
           </div>
 
-          {/* Cover Letter Editor */}
           {activeTab === 'letter' && (
             <div className="editor-wrap">
               <div className="editor-header">
@@ -336,13 +412,12 @@ export default function CoverLetterPage({ job }) {
               <textarea
                 className="cover-letter-editor"
                 value={coverLetterText}
-                onChange={e => setResult(current => current ? { ...current, cover_letter: e.target.value } : current)}
+                onChange={(e) => setResult((current) => current ? { ...current, cover_letter: e.target.value } : current)}
                 rows={16}
               />
             </div>
           )}
 
-          {/* Tailored Bullets */}
           {activeTab === 'draft' && (
             <div className="bullets-wrap">
               <p className="bullets-info">
@@ -386,7 +461,6 @@ export default function CoverLetterPage({ job }) {
             </div>
           )}
 
-          {/* Skill Gaps */}
           {activeTab === 'gaps' && (
             <div className="gaps-wrap">
               <p className="gaps-info">These skills appear in the JD but not in your CV. Consider adding them if you have experience.</p>
@@ -400,6 +474,82 @@ export default function CoverLetterPage({ job }) {
           )}
         </>
       )}
+
+      <AISettingsModal
+        open={showAISettings}
+        settings={aiSettings}
+        loading={loading && loadingAction === 'ai'}
+        onClose={() => setShowAISettings(false)}
+        onChange={(next) => setAiSettings(next)}
+        onSubmit={generateWithAI}
+      />
+    </div>
+  )
+}
+
+function AISettingsModal({ open, settings, loading, onClose, onChange, onSubmit }) {
+  if (!open) return null
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div className="modal-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 className="modal-title">Regenerate with AI</h3>
+            <p className="modal-sub">Answer these once and we will frame the Gemini prompt around them.</p>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="modal-grid">
+          <label className="modal-field">
+            <span>Tone</span>
+            <select value={settings.tone} onChange={(e) => onChange({ ...settings, tone: e.target.value })}>
+              <option value="formal">Formal</option>
+              <option value="confident">Confident</option>
+              <option value="concise">Concise</option>
+              <option value="warm">Warm</option>
+              <option value="adaptive">Adaptive</option>
+            </select>
+          </label>
+
+          <label className="modal-field">
+            <span>Length</span>
+            <select value={settings.length} onChange={(e) => onChange({ ...settings, length: e.target.value })}>
+              <option value="short">Short</option>
+              <option value="medium">Medium</option>
+              <option value="detailed">Detailed</option>
+            </select>
+          </label>
+
+          <label className="modal-field modal-field-wide">
+            <span>Focus</span>
+            <select value={settings.focus} onChange={(e) => onChange({ ...settings, focus: e.target.value })}>
+              <option value="skills match">Skills match</option>
+              <option value="achievements">Achievements</option>
+              <option value="motivation">Motivation</option>
+              <option value="leadership">Leadership</option>
+            </select>
+          </label>
+
+          <label className="modal-field modal-field-wide">
+            <span>Extra instructions</span>
+            <textarea
+              rows={5}
+              placeholder="Mention relocation, visa, joining timeline, or anything to avoid."
+              value={settings.notes}
+              onChange={(e) => onChange({ ...settings, notes: e.target.value })}
+            />
+          </label>
+        </div>
+
+        <div className="modal-actions">
+          <button type="button" className="btn-ghost-sm" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-primary-sm" onClick={onSubmit} disabled={loading}>
+            {loading ? '⏳ Generating...' : '✨ Generate with AI'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
