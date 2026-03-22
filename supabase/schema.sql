@@ -106,7 +106,7 @@ create table if not exists public.jobs (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint jobs_source_check
-    check (source in ('adzuna', 'indeed_rss', 'eurojobs_rss', 'remotive', 'linkedin', 'manual')),
+    check (source in ('adzuna', 'indeed_rss', 'eurojobs_rss', 'remotive', 'greenhouse', 'lever', 'linkedin', 'manual')),
   constraint jobs_listing_status_check
     check (listing_status in ('active', 'expired', 'filled', 'hidden', 'unknown'))
 );

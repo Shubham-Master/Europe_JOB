@@ -990,6 +990,10 @@ func normalizedSource(source string) string {
 	switch strings.ToLower(strings.TrimSpace(source)) {
 	case "adzuna":
 		return "adzuna"
+	case "greenhouse":
+		return "greenhouse"
+	case "lever":
+		return "lever"
 	case "indeed", "indeed_rss":
 		return "indeed_rss"
 	case "eurojobs", "eurojobs_rss":

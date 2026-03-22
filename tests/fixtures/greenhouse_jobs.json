@@ -1,0 +1,22 @@
+{
+  "jobs": [
+    {
+      "id": 101,
+      "title": "Finance Operations Analyst",
+      "absolute_url": "https://boards.greenhouse.io/example/jobs/101",
+      "updated_at": "2026-03-20T12:00:00Z",
+      "location": { "name": "Berlin, Germany" },
+      "content": "<p>Finance operations, reconciliation and reporting.</p>",
+      "metadata": [{ "name": "Employment Type", "value": "Full-time" }]
+    },
+    {
+      "id": 202,
+      "title": "Senior Backend Engineer",
+      "absolute_url": "https://boards.greenhouse.io/example/jobs/202",
+      "updated_at": "2026-03-19T12:00:00Z",
+      "location": { "name": "New York, United States" },
+      "content": "<p>Platform engineering role.</p>",
+      "metadata": [{ "name": "Employment Type", "value": "Full-time" }]
+    }
+  ]
+}

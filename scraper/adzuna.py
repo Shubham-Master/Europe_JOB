@@ -7,11 +7,13 @@ Sign up: https://developer.adzuna.com
 
 import os
 import time
-import hashlib
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
+
+from scraper.keywords import build_search_keywords
+from scraper.profile_filters import DEFAULT_TARGET_COUNTRIES, generate_job_id
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
@@ -30,14 +32,7 @@ ADZUNA_COUNTRIES = {
     "es": "Spain",
 }
 
-DEFAULT_TARGET_COUNTRIES = ["nl", "de", "be", "ch"]
-
 BASE_URL = "https://api.adzuna.com/v1/api/jobs"
-
-
-def generate_job_id(url: str) -> str:
-    """Generate a unique ID for a job based on its URL."""
-    return hashlib.md5(url.encode()).hexdigest()[:12]
 
 
 def fetch_jobs_by_keyword(
@@ -127,7 +122,7 @@ def parse_adzuna_job(raw: dict, country_code: str) -> dict:
         "employment_type": raw.get("contract_time", "") or "",
         "remote_type": "",
         "match_score": 0.0,  # Will be set by matcher
-        "scraped_at": datetime.utcnow().isoformat(),
+        "scraped_at": datetime.now(timezone.utc).isoformat(),
         "posted_at": raw.get("created", "") or "",
         "seen": False,
     }
@@ -164,7 +159,7 @@ def scrape_for_profile(profile: dict, countries: list[str] = None, pages_per_sea
     countries = select_adzuna_countries(profile, countries)
 
     # Build search keywords from profile
-    keywords = build_keywords(profile)
+    keywords = build_search_keywords(profile)
     print(f"\n🔍 Search keywords: {keywords}")
     print(f"🌍 Countries: {[ADZUNA_COUNTRIES[c] for c in countries]}\n")
 
@@ -187,45 +182,8 @@ def scrape_for_profile(profile: dict, countries: list[str] = None, pages_per_sea
 
 
 def build_keywords(profile: dict) -> list[str]:
-    """
-    Build a smart list of search keywords from the CV profile.
-    Returns max 5 keywords to stay within API limits.
-    """
-    keywords = []
-
-    # Use target roles first (most specific)
-    target_roles = profile.get("target_roles", [])
-    keywords.extend(target_roles[:2])
-
-    # Add current title
-    current_title = profile.get("current_title", "")
-    if current_title and current_title not in keywords:
-        keywords.append(current_title)
-
-    # Add domain-based keywords
-    domains = profile.get("domains", [])
-    domain_map = {
-        "backend": "backend developer",
-        "frontend": "frontend developer",
-        "fullstack": "full stack developer",
-        "data science": "data scientist",
-        "devops": "devops engineer",
-        "machine learning": "machine learning engineer",
-        "mobile": "mobile developer",
-        "cloud": "cloud engineer",
-    }
-    for domain in domains[:2]:
-        mapped = domain_map.get(domain.lower())
-        if mapped and mapped not in keywords:
-            keywords.append(mapped)
-
-    # Fallback to top technical skills
-    if not keywords:
-        skills = profile.get("technical_skills", [])
-        if skills:
-            keywords.append(skills[0] + " developer")
-
-    return keywords[:5]  # Max 5 keywords
+    """Backwards-compatible wrapper around the shared keyword builder."""
+    return build_search_keywords(profile, max_keywords=5)
 
 
 if __name__ == "__main__":

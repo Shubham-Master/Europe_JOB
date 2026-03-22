@@ -4,11 +4,11 @@ Scrapes jobs from Indeed and other free RSS feeds.
 No API key required!
 """
 
-import hashlib
+import os
 import sys
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -19,59 +19,33 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scraper.keywords import build_search_keywords
+from scraper.profile_filters import (
+    COUNTRY_CODE_TO_LOCATION,
+    DEFAULT_TARGET_COUNTRIES,
+    generate_job_id,
+    normalize_country_codes,
+)
+
 # RSS feed templates per source
 RSS_SOURCES = {
     "indeed": "https://www.indeed.com/rss?q={keyword}&l={location}&fromage=7",
     "eurojobs": "https://www.eurojobs.com/search-results-jobs/?keywords={keyword}&rss=1",
 }
 
-EUROPEAN_LOCATIONS = [
-    "Germany",
-    "Netherlands",
-    "France",
-    "Belgium",
-    "Switzerland",
-    "Austria",
-    "Poland",
-    "Sweden",
-    "Denmark",
-    "Ireland",
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36",
+    "Accept": "application/rss+xml, application/xml, text/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
+DEFAULT_RSS_LOCATIONS = [
+    COUNTRY_CODE_TO_LOCATION[code]
+    for code in DEFAULT_TARGET_COUNTRIES
 ]
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; JobHunterBot/1.0)",
-    "Accept": "application/rss+xml, application/xml, text/xml",
-}
 
-COUNTRY_CODE_TO_LOCATION = {
-    "at": "Austria",
-    "be": "Belgium",
-    "ch": "Switzerland",
-    "cz": "Czechia",
-    "de": "Germany",
-    "dk": "Denmark",
-    "es": "Spain",
-    "fi": "Finland",
-    "fr": "France",
-    "gb": "United Kingdom",
-    "ie": "Ireland",
-    "it": "Italy",
-    "lu": "Luxembourg",
-    "nl": "Netherlands",
-    "no": "Norway",
-    "pl": "Poland",
-    "pt": "Portugal",
-    "se": "Sweden",
-}
-
-DEFAULT_RSS_LOCATIONS = ["Netherlands", "Germany", "Belgium"]
-
-
-def generate_job_id(url: str) -> str:
-    return hashlib.md5(url.encode()).hexdigest()[:12]
-
-
-def fetch_indeed_rss(keyword: str, location: str = "Germany") -> list[dict]:
+def fetch_indeed_rss(keyword: str, location: str = "Germany", return_meta: bool = False):
     """
     Fetch jobs from Indeed RSS feed.
 
@@ -90,12 +64,20 @@ def fetch_indeed_rss(keyword: str, location: str = "Germany") -> list[dict]:
     try:
         print(f"  📡 Indeed RSS: '{keyword}' in {location}...")
         response = requests.get(url, headers=HEADERS, timeout=10)
+        if response.status_code in {403, 404}:
+            print(f"  ℹ️  Indeed RSS unavailable for {location} (status {response.status_code})")
+            return ([], True) if return_meta else []
         response.raise_for_status()
-        return parse_rss_feed(response.text, location, source="indeed_rss")
+        content_type = (response.headers.get("content-type") or "").lower()
+        if "xml" not in content_type and "<rss" not in response.text[:200].lower():
+            print(f"  ℹ️  Indeed RSS returned non-XML content for {location}; skipping")
+            return ([], True) if return_meta else []
+        jobs = parse_rss_feed(response.text, location, source="indeed_rss")
+        return (jobs, False) if return_meta else jobs
 
     except requests.exceptions.RequestException as e:
         print(f"  ❌ Indeed RSS failed for {location}: {e}")
-        return []
+        return ([], False) if return_meta else []
 
 
 def parse_rss_feed(xml_text: str, location: str, source: str) -> list[dict]:
@@ -149,7 +131,7 @@ def parse_rss_feed(xml_text: str, location: str, source: str) -> list[dict]:
                 "employment_type": "",
                 "remote_type": "",
                 "match_score": 0.0,
-                "scraped_at": datetime.utcnow().isoformat(),
+                "scraped_at": datetime.now(timezone.utc).isoformat(),
                 "posted_at": posted_at,
                 "seen": False,
             })
@@ -173,7 +155,10 @@ def select_rss_locations(profile: dict, locations: list[str] = None) -> list[str
     if locations is not None:
         return locations
 
-    requested_countries = profile.get("target_countries", []) or []
+    requested_countries = normalize_country_codes(
+        profile.get("target_countries", []),
+        DEFAULT_TARGET_COUNTRIES,
+    )
     resolved = [
         COUNTRY_CODE_TO_LOCATION[country.lower().strip()]
         for country in requested_countries
@@ -196,8 +181,7 @@ def scrape_rss_for_profile(profile: dict, locations: list[str] = None) -> list[d
     """
     locations = select_rss_locations(profile, locations)
 
-    from scraper.adzuna import build_keywords
-    keywords = build_keywords(profile)
+    keywords = build_search_keywords(profile, max_keywords=5)
 
     print(f"\n🔍 RSS Keywords: {keywords}")
     print(f"🌍 Locations: {locations}\n")
@@ -207,12 +191,17 @@ def scrape_rss_for_profile(profile: dict, locations: list[str] = None) -> list[d
 
     for keyword in keywords[:2]:  # Keep RSS fast enough for manual pipeline runs
         for location in locations:
-            jobs = fetch_indeed_rss(keyword, location)
+            jobs, blocked = fetch_indeed_rss(keyword, location, return_meta=True)
 
             for job in jobs:
                 if job["id"] not in seen_ids:
                     seen_ids.add(job["id"])
                     all_jobs.append(job)
+
+            if blocked:
+                print("  ℹ️  Skipping remaining Indeed RSS lookups for this run")
+                print(f"\n🎯 Total unique RSS jobs: {len(all_jobs)}")
+                return all_jobs
 
             time.sleep(1)  # Be polite
 
@@ -223,7 +212,6 @@ def scrape_rss_for_profile(profile: dict, locations: list[str] = None) -> list[d
 if __name__ == "__main__":
     import json
     import sys
-    import os
 
     profile_path = sys.argv[1] if len(sys.argv) > 1 else "data/profile.json"
 

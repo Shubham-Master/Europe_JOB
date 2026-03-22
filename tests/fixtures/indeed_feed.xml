@@ -1,0 +1,17 @@
+<rss version="2.0">
+  <channel>
+    <title>Indeed Jobs</title>
+    <item>
+      <title>Operations Manager - Example Co</title>
+      <link>https://www.indeed.com/viewjob?jk=ops-1</link>
+      <description><![CDATA[Lead business operations and planning.]]></description>
+      <pubDate>Fri, 20 Mar 2026 12:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Finance Analyst - Example Co</title>
+      <link>https://www.indeed.com/viewjob?jk=fin-1</link>
+      <description><![CDATA[Finance planning and analysis role.]]></description>
+      <pubDate>Thu, 19 Mar 2026 08:30:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,15 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import api from '../lib/api'
+import { buildSourceBreakdown, compareJobs, geoRiskLabel, isLikelyGeoLocked } from '../lib/jobQuality'
 import './JobsPage.css'
 
 function ScoreBadge({ score }) {
   const cls = score >= 75 ? 'excellent' : score >= 55 ? 'good' : score >= 35 ? 'fair' : 'low'
   const label = score >= 75 ? '🟢' : score >= 55 ? '🟡' : score >= 35 ? '🟠' : '🔴'
   return <span className={`score-badge ${cls}`}>{label} {score}%</span>
-}
-
-function isLikelyGeoLocked(job) {
-  return job?.source === 'adzuna'
 }
 
 export default function JobsPage({ onJobSelect, onSceneChange }) {
@@ -113,14 +110,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
   const filtered = baseFiltered.filter(job => {
     if (hideGeoLocked && isLikelyGeoLocked(job)) return false
     return true
-  }).sort((a, b) => {
-    if (sortBy === 'latest') {
-      const aTime = a.posted_at ? new Date(a.posted_at).getTime() : 0
-      const bTime = b.posted_at ? new Date(b.posted_at).getTime() : 0
-      return bTime - aTime
-    }
-    return (b.match_score || 0) - (a.match_score || 0)
-  })
+  }).sort((a, b) => compareJobs(a, b, sortBy))
 
   const stats = {
     total: jobs.length,
@@ -129,6 +119,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
     unseen: jobs.filter(job => !job.seen).length,
     saved: jobs.filter(job => job.saved).length,
   }
+  const sourceBreakdown = buildSourceBreakdown(baseFiltered)
 
   return (
     <div className="jobs-page">
@@ -192,6 +183,22 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
 
       {error && <div className="page-error">{error}</div>}
 
+      {!loading && sourceBreakdown.length > 0 && (
+        <div className="source-mix-card">
+          <div>
+            <div className="source-mix-title">Source Mix</div>
+            <div className="source-mix-sub">Current filtered inventory before geo-risk hiding.</div>
+          </div>
+          <div className="source-mix-chips">
+            {sourceBreakdown.map((item) => (
+              <span key={item.source} className="source-mix-chip">
+                {item.label} <strong>{item.count}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="jobs-list">
         {loading && (
           <div className="empty-state">Loading matched jobs...</div>
@@ -219,6 +226,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
                     <span className="location">📍 {job.location}</span>
                     <span className="dot">·</span>
                     <span className="source">{job.source}</span>
+                    <span className={`risk-pill ${isLikelyGeoLocked(job) ? 'high' : 'normal'}`}>{geoRiskLabel(job)}</span>
                     {job.posted_at && (
                       <>
                         <span className="dot">·</span>

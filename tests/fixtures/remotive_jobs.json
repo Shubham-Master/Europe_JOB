@@ -1,0 +1,24 @@
+{
+  "jobs": [
+    {
+      "id": 301,
+      "title": "Customer Success Manager",
+      "company_name": "RemoteCo",
+      "candidate_required_location": "Europe",
+      "url": "https://remotive.com/remote-jobs/customer-success/customer-success-manager-301",
+      "description": "<p>Own renewals, onboarding and account growth.</p>",
+      "job_type": "full_time",
+      "publication_date": "2026-03-20T07:00:00"
+    },
+    {
+      "id": 302,
+      "title": "Data Engineer",
+      "company_name": "RemoteCo",
+      "candidate_required_location": "United States",
+      "url": "https://remotive.com/remote-jobs/software-dev/data-engineer-302",
+      "description": "<p>Build ETL systems and pipelines.</p>",
+      "job_type": "full_time",
+      "publication_date": "2026-03-19T07:00:00"
+    }
+  ]
+}

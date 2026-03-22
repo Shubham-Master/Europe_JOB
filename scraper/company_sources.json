@@ -1,0 +1,12 @@
+[
+  {"company":"Monzo","adapter":"greenhouse","token_or_site":"monzo","country_codes":["gb"],"role_tags":["engineering","data","product","operations","finance","compliance"],"careers_url":"https://boards.greenhouse.io/monzo"},
+  {"company":"SumUp","adapter":"greenhouse","token_or_site":"sumup","country_codes":["de","gb"],"role_tags":["engineering","data","product","operations","finance","sales"],"careers_url":"https://boards.greenhouse.io/sumup"},
+  {"company":"Contentful","adapter":"greenhouse","token_or_site":"contentful","country_codes":["de"],"role_tags":["engineering","product","marketing","sales","customer_success"],"careers_url":"https://boards.greenhouse.io/contentful"},
+  {"company":"Commercetools","adapter":"greenhouse","token_or_site":"commercetools","country_codes":["de"],"role_tags":["engineering","product","operations","sales","marketing"],"careers_url":"https://boards.greenhouse.io/commercetools"},
+  {"company":"Celonis","adapter":"greenhouse","token_or_site":"celonis","country_codes":["de"],"role_tags":["engineering","data","product","operations","finance","consulting","sales"],"careers_url":"https://boards.greenhouse.io/celonis"},
+  {"company":"Doctolib","adapter":"greenhouse","token_or_site":"doctolib","country_codes":["fr"],"role_tags":["engineering","product","operations","marketing","sales","customer_success"],"careers_url":"https://boards.greenhouse.io/doctolib"},
+  {"company":"Remote","adapter":"greenhouse","token_or_site":"remotecom","country_codes":["gb","ie","de","fr","nl","be","ch"],"role_tags":["engineering","product","operations","finance","marketing","sales","customer_success","hr"],"careers_url":"https://boards.greenhouse.io/remotecom"},
+  {"company":"GitLab","adapter":"greenhouse","token_or_site":"gitlab","country_codes":["gb","ie","de","fr","nl","be","ch"],"role_tags":["engineering","product","operations","marketing","sales","customer_success","finance"],"careers_url":"https://boards.greenhouse.io/gitlab"},
+  {"company":"Spotify","adapter":"lever","token_or_site":"spotify","country_codes":["gb","se"],"role_tags":["engineering","data","product","marketing","sales"],"careers_url":"https://jobs.lever.co/spotify"},
+  {"company":"Spendesk","adapter":"lever","token_or_site":"spendesk","country_codes":["fr"],"role_tags":["engineering","product","operations","finance","sales","customer_success"],"careers_url":"https://jobs.lever.co/spendesk"}
+]

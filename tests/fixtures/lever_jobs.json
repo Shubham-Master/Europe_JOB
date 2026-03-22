@@ -1,0 +1,24 @@
+[
+  {
+    "id": "lever-1",
+    "text": "Product Manager",
+    "hostedUrl": "https://jobs.lever.co/example/lever-1",
+    "createdAt": 1773988800000,
+    "descriptionPlain": "Product discovery and stakeholder management.",
+    "categories": {
+      "location": "Amsterdam, Netherlands",
+      "commitment": "Full-time"
+    }
+  },
+  {
+    "id": "lever-2",
+    "text": "Sales Director",
+    "hostedUrl": "https://jobs.lever.co/example/lever-2",
+    "createdAt": 1773902400000,
+    "descriptionPlain": "Lead a North America enterprise sales team.",
+    "categories": {
+      "location": "Boston, United States",
+      "commitment": "Full-time"
+    }
+  }
+]

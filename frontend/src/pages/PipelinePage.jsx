@@ -4,7 +4,7 @@ import api from '../lib/api'
 import './PipelinePage.css'
 
 const STEPS = [
-  { id: 'scrape', label: 'Scrape Jobs', icon: '🕷️', desc: 'Adzuna API + RSS feeds' },
+  { id: 'scrape', label: 'Scrape Jobs', icon: '🕷️', desc: 'ATS boards + Remotive + RSS + Adzuna' },
   { id: 'match', label: 'Match to CV', icon: '🎯', desc: 'Score against your profile' },
   { id: 'filter', label: 'Filter Top Jobs', icon: '⚡', desc: 'Prepare ranked matches' },
   { id: 'notify', label: 'Send Notification', icon: '🔔', desc: 'Digest notification when configured' },
