@@ -98,6 +98,53 @@ func TestUpdateUserProfileRejectsEmptyCountries(t *testing.T) {
 	}
 }
 
+func TestDeleteProfileDeletesActiveCVVersionForUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/v1/cv_versions":
+			if r.Method != http.MethodDelete {
+				t.Fatalf("expected DELETE for cv_versions, got %s", r.Method)
+			}
+			if got := r.URL.Query().Get("user_id"); got != "eq.user-1" {
+				t.Fatalf("expected user_id filter, got %q", got)
+			}
+			if got := r.URL.Query().Get("is_active"); got != "is.true" {
+				t.Fatalf("expected is_active filter, got %q", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	h := &Handler{
+		cfg:   &config.Config{},
+		store: store.NewSupabaseStore(server.URL, "test-key"),
+	}
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "user-1")
+		c.Next()
+	})
+	router.DELETE("/api/v1/cv/profile", h.DeleteProfile)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/cv/profile", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !strings.Contains(rec.Body.String(), "Active CV deleted") {
+		t.Fatalf("unexpected delete response: %s", rec.Body.String())
+	}
+}
+
 func TestCreateProfileFileForUserUsesUniqueTempFiles(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

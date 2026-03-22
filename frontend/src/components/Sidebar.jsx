@@ -10,7 +10,7 @@ const NAV = [
   { to: '/pipeline',     icon: '🔄', label: 'Pipeline' },
 ]
 
-export default function Sidebar({ user, onSignOut }) {
+function Sidebar({ user, onSignOut }) {
   const accountName = user?.user_metadata?.full_name || 'My account'
 
   return (
@@ -46,7 +46,7 @@ export default function Sidebar({ user, onSignOut }) {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="account-card">
+        <NavLink to="/profile" className="account-card account-link" aria-label="Open workspace profile">
           <div className="account-avatar">
             {(accountName[0] || 'U').toUpperCase()}
           </div>
@@ -55,7 +55,7 @@ export default function Sidebar({ user, onSignOut }) {
             <div className="account-email" title={accountName}>{accountName}</div>
             <div className="account-subtle">Manage personal details in My Profile</div>
           </div>
-        </div>
+        </NavLink>
         <button type="button" className="signout-button" onClick={onSignOut}>
           Sign out
         </button>
@@ -63,3 +63,5 @@ export default function Sidebar({ user, onSignOut }) {
     </aside>
   )
 }
+
+export default React.memo(Sidebar)

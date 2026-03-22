@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { SCENES } from '../lib/scenes'
 import './ScenicBackdrop.css'
 
-export default function ScenicBackdrop({ sceneKey }) {
+const sceneSourceCache = new Map()
+
+function ScenicBackdrop({ sceneKey }) {
   const fallbackScene = SCENES.europe
   const nextScene = useMemo(() => SCENES[sceneKey] || fallbackScene, [sceneKey])
   const [activeScene, setActiveScene] = useState({
@@ -73,8 +75,13 @@ function SceneLayer({ scene, className }) {
 
 function resolveSceneSource(scene) {
   const sources = scene.sources?.length ? scene.sources : [scene.image]
+  const cacheKey = sources.join('|')
 
-  return new Promise((resolve) => {
+  if (sceneSourceCache.has(cacheKey)) {
+    return sceneSourceCache.get(cacheKey)
+  }
+
+  const pending = new Promise((resolve) => {
     const tryIndex = (index) => {
       const src = sources[index]
       if (!src) {
@@ -96,4 +103,9 @@ function resolveSceneSource(scene) {
 
     tryIndex(0)
   })
+
+  sceneSourceCache.set(cacheKey, pending)
+  return pending
 }
+
+export default React.memo(ScenicBackdrop)

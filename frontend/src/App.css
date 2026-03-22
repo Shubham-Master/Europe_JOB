@@ -26,6 +26,20 @@
   max-width: 1320px;
 }
 
+.page-loading-shell {
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.016)), var(--bg2);
+  color: var(--text2);
+  font-size: 15px;
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow);
+}
+
 @media (max-width: 768px) {
   .main { margin-left: 0; padding: 16px; padding-top: 76px; }
 }

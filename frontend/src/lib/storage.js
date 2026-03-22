@@ -127,3 +127,11 @@ export function saveCVSnapshot(profile, filename = '') {
   writeJSON(scopedKey(CV_HISTORY_KEY), next)
   return next
 }
+
+export function removeCVSnapshot(signature) {
+  if (!signature) return getCVHistory()
+
+  const next = getCVHistory().filter((item) => item?._signature !== signature)
+  writeJSON(scopedKey(CV_HISTORY_KEY), next)
+  return next
+}

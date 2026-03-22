@@ -209,6 +209,20 @@ func (s *SupabaseStore) GetActiveCVVersion(userID string) (*CVVersion, error) {
 	return &rows[0], nil
 }
 
+func (s *SupabaseStore) DeleteActiveCVVersion(userID string) error {
+	if !s.Enabled() {
+		return nil
+	}
+
+	query := url.Values{}
+	if strings.TrimSpace(userID) != "" {
+		query.Set("user_id", "eq."+userID)
+	}
+	query.Set("is_active", "is.true")
+
+	return s.requestJSON(http.MethodDelete, "cv_versions", query, nil, "return=minimal", nil)
+}
+
 func (s *SupabaseStore) GetUserProfile(userID string) (*models.UserProfile, error) {
 	if !s.Enabled() || strings.TrimSpace(userID) == "" {
 		return nil, nil

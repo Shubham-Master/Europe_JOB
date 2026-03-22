@@ -59,6 +59,7 @@ func main() {
 			cv.POST("/parse", h.ParseCV)            // POST /api/v1/cv/parse (multipart)
 			cv.POST("/activate", h.ActivateProfile) // POST /api/v1/cv/activate
 			cv.GET("/profile", h.GetProfile)        // GET  /api/v1/cv/profile
+			cv.DELETE("/profile", h.DeleteProfile)  // DELETE /api/v1/cv/profile
 		}
 
 		// Cover Letter

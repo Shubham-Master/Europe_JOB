@@ -192,6 +192,7 @@
 }
 
 .history-activate,
+.history-delete,
 .history-badge {
   border-radius: 999px;
   padding: 8px 12px;
@@ -206,6 +207,17 @@
 }
 
 .history-activate:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.history-delete {
+  border: 1px solid rgba(255, 116, 116, 0.25);
+  color: #ffb0b0;
+  background: rgba(255, 116, 116, 0.08);
+}
+
+.history-delete:disabled {
   opacity: 0.65;
   cursor: wait;
 }

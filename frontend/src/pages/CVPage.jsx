@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
-import { getCVHistory, profileSignature, saveCVSnapshot } from '../lib/storage'
+import { getCVHistory, profileSignature, removeCVSnapshot, saveCVSnapshot } from '../lib/storage'
 import './CVPage.css'
 
 export default function CVPage({ onActiveProfileChange }) {
@@ -13,6 +13,7 @@ export default function CVPage({ onActiveProfileChange }) {
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [error, setError]       = useState('')
   const [activatingSignature, setActivatingSignature] = useState('')
+  const [deletingSignature, setDeletingSignature] = useState('')
   const [activeSignature, setActiveSignature] = useState('')
   const fileRef = useRef()
   const navigate = useNavigate()
@@ -111,6 +112,49 @@ export default function CVPage({ onActiveProfileChange }) {
     }
 
     setActivatingSignature('')
+  }
+
+  const deleteHistoryItem = async (item) => {
+    if (!item?.profile) return
+
+    const itemSignature = item._signature || profileSignature(item.profile)
+    const deletingActive = activeSignature === itemSignature
+    const confirmed = window.confirm(
+      deletingActive
+        ? 'Delete this active CV? This will remove the current live CV from your workspace until you activate or upload another one.'
+        : 'Delete this CV snapshot from this browser?'
+    )
+
+    if (!confirmed) return
+
+    setDeletingSignature(itemSignature)
+    setError('')
+
+    try {
+      if (deletingActive) {
+        await api.delete('/api/v1/cv/profile')
+      }
+
+      const nextHistory = removeCVSnapshot(itemSignature)
+      setHistory(nextHistory)
+
+      const currentPreviewSignature = profile ? profileSignature(profile) : ''
+      if (deletingActive) {
+        setProfile(null)
+        setUploaded(false)
+        setActiveSignature('default')
+        onActiveProfileChange?.('default')
+      } else if (currentPreviewSignature === itemSignature) {
+        const activeItem = nextHistory.find((entry) => (
+          (entry._signature || profileSignature(entry.profile)) === activeSignature
+        ))
+        setProfile(activeItem?.profile || null)
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not delete this CV right now.')
+    }
+
+    setDeletingSignature('')
   }
 
   const onDrop = (e) => {
@@ -227,15 +271,36 @@ export default function CVPage({ onActiveProfileChange }) {
                 </button>
                 <div className="history-actions">
                   {activeSignature === itemSignature ? (
-                    <span className="history-badge">Active CV</span>
+                    <>
+                      <span className="history-badge">Active CV</span>
+                      <button
+                        type="button"
+                        className="history-delete"
+                        onClick={() => deleteHistoryItem(item)}
+                        disabled={deletingSignature === itemSignature}
+                      >
+                        {deletingSignature === itemSignature ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </>
                   ) : (
-                    <button
-                      className="history-activate"
-                      onClick={() => activateHistoryItem(item)}
-                      disabled={activatingSignature === itemSignature}
-                    >
-                      {activatingSignature === itemSignature ? 'Activating...' : 'Use this CV'}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="history-activate"
+                        onClick={() => activateHistoryItem(item)}
+                        disabled={activatingSignature === itemSignature}
+                      >
+                        {activatingSignature === itemSignature ? 'Activating...' : 'Use this CV'}
+                      </button>
+                      <button
+                        type="button"
+                        className="history-delete"
+                        onClick={() => deleteHistoryItem(item)}
+                        disabled={deletingSignature === itemSignature}
+                      >
+                        {deletingSignature === itemSignature ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

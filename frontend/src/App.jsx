@@ -1,19 +1,20 @@
-import React, { useEffect, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext.jsx'
 import AuthScreen from './components/AuthScreen.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import ScenicBackdrop from './components/ScenicBackdrop.jsx'
-import GuideBot from './components/GuideBot.jsx'
-import JobsPage from './pages/JobsPage.jsx'
-import CoverLetterPage from './pages/CoverLetterPage.jsx'
-import PipelinePage from './pages/PipelinePage.jsx'
-import CVPage from './pages/CVPage.jsx'
-import ProfilePage from './pages/ProfilePage.jsx'
 import api from './lib/api'
 import { loadSelectedJob, profileSignature, saveSelectedJob, setActiveCVScope, setStorageScope } from './lib/storage'
 import { sceneForCountry, sceneForPath } from './lib/scenes'
 import './App.css'
+
+const GuideBot = lazy(() => import('./components/GuideBot.jsx'))
+const JobsPage = lazy(() => import('./pages/JobsPage.jsx'))
+const CoverLetterPage = lazy(() => import('./pages/CoverLetterPage.jsx'))
+const PipelinePage = lazy(() => import('./pages/PipelinePage.jsx'))
+const CVPage = lazy(() => import('./pages/CVPage.jsx'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
 
 export default function App() {
   const location = useLocation()
@@ -102,23 +103,27 @@ export default function App() {
       <Sidebar user={user} onSignOut={signOut} />
       <main className="main">
         <div className="content-shell">
-          <Routes>
-            <Route path="/" element={<Navigate to="/jobs" replace />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/jobs" element={<JobsPage onJobSelect={handleJobSelect} onSceneChange={setJobsCountry} />} />
-            <Route path="/cover-letter" element={<CoverLetterPage job={selectedJob} onJobChange={setSelectedJob} />} />
-            <Route path="/pipeline" element={<PipelinePage />} />
-            <Route path="/cv" element={<CVPage onActiveProfileChange={setActiveCVSignature} />} />
-            <Route path="*" element={<Navigate to="/jobs" replace />} />
-          </Routes>
+          <Suspense fallback={<div className="page-loading-shell">Loading workspace…</div>}>
+            <Routes>
+              <Route path="/" element={<Navigate to="/jobs" replace />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/jobs" element={<JobsPage onJobSelect={handleJobSelect} onSceneChange={setJobsCountry} />} />
+              <Route path="/cover-letter" element={<CoverLetterPage job={selectedJob} onJobChange={setSelectedJob} />} />
+              <Route path="/pipeline" element={<PipelinePage />} />
+              <Route path="/cv" element={<CVPage onActiveProfileChange={setActiveCVSignature} />} />
+              <Route path="*" element={<Navigate to="/jobs" replace />} />
+            </Routes>
+          </Suspense>
         </div>
       </main>
-      <GuideBot
-        currentPath={location.pathname}
-        hasSelectedJob={Boolean(selectedJob)}
-        countryFilter={jobsCountry}
-        onNavigate={navigate}
-      />
+      <Suspense fallback={null}>
+        <GuideBot
+          currentPath={location.pathname}
+          hasSelectedJob={Boolean(selectedJob)}
+          countryFilter={jobsCountry}
+          onNavigate={navigate}
+        />
+      </Suspense>
     </div>
   )
 }

@@ -3,6 +3,8 @@ import api from '../lib/api'
 import { buildSourceBreakdown, compareJobs, geoRiskLabel, isLikelyGeoLocked } from '../lib/jobQuality'
 import './JobsPage.css'
 
+const INITIAL_VISIBLE_JOBS = 60
+
 function ScoreBadge({ score }) {
   const cls = score >= 75 ? 'excellent' : score >= 55 ? 'good' : score >= 35 ? 'fair' : 'low'
   const label = score >= 75 ? '🟢' : score >= 55 ? '🟡' : score >= 35 ? '🟠' : '🔴'
@@ -20,6 +22,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
   const [error, setError]     = useState('')
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_JOBS)
 
   useEffect(() => {
     fetchJobs()
@@ -28,6 +31,10 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
   useEffect(() => {
     onSceneChange?.(country)
   }, [country, onSceneChange])
+
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_JOBS)
+  }, [country, source, hideGeoLocked, savedOnly, minScore, sortBy, search, jobs.length])
 
   const fetchJobs = async () => {
     setLoading(true)
@@ -133,6 +140,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
     if (hideGeoLocked && isLikelyGeoLocked(job)) return false
     return true
   }).sort((a, b) => compareJobs(a, b, sortBy))
+  const visibleJobs = filtered.slice(0, visibleCount)
 
   const stats = {
     total: jobs.length,
@@ -221,7 +229,7 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
           </div>
         )}
 
-        {!loading && filtered.map(job => (
+        {!loading && visibleJobs.map(job => (
           <div key={job.id} className={`job-card ${job.seen ? 'seen' : ''}`}>
             <div className="job-main">
               <div className="job-top">
@@ -274,6 +282,18 @@ export default function JobsPage({ onJobSelect, onSceneChange }) {
           </div>
         ))}
       </div>
+
+      {!loading && filtered.length > visibleCount && (
+        <div className="jobs-more">
+          <button
+            type="button"
+            className="jobs-more-button"
+            onClick={() => setVisibleCount((current) => current + INITIAL_VISIBLE_JOBS)}
+          >
+            Show more jobs ({filtered.length - visibleCount} remaining)
+          </button>
+        </div>
+      )}
     </div>
   )
 }

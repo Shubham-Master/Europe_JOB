@@ -289,3 +289,25 @@ input[type="range"] {
   background: rgba(8, 21, 33, 0.42);
   backdrop-filter: blur(14px);
 }
+
+.jobs-more {
+  display: flex;
+  justify-content: center;
+}
+
+.jobs-more-button {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border2);
+  background: rgba(121, 237, 255, 0.08);
+  color: var(--accent2);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.jobs-more-button:hover {
+  background: rgba(121, 237, 255, 0.14);
+  color: var(--text);
+  transform: translateY(-1px);
+}

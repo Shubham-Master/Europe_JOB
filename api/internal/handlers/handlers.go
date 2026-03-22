@@ -477,6 +477,40 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: data})
 }
 
+func (h *Handler) DeleteProfile(c *gin.Context) {
+	userID := currentUserID(c)
+	userScoped := isUserScopedRequest(userID, h.store)
+
+	if h.store != nil && h.store.Enabled() {
+		if err := h.store.DeleteActiveCVVersion(userID); err != nil {
+			if userScoped {
+				c.JSON(http.StatusInternalServerError, models.APIResponse{
+					Success: false,
+					Error:   "Could not delete the active CV right now.",
+				})
+				return
+			}
+			log.Printf("⚠️  Supabase active CV delete failed, continuing with local cleanup: %v", err)
+		}
+	}
+
+	if !userScoped {
+		profilePath := resolvedPath(profileJSONPath)
+		if err := os.Remove(profilePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error:   "Could not delete the local CV profile right now.",
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "Active CV deleted",
+	})
+}
+
 // ActivateProfile makes a selected parsed CV snapshot the active profile.
 func (h *Handler) ActivateProfile(c *gin.Context) {
 	userID := currentUserID(c)
