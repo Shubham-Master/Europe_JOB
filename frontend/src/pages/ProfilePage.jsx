@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import api from '../lib/api'
-import { DEFAULT_TARGET_COUNTRIES, EUROPE_COUNTRY_OPTIONS, countryLabelFromCode } from '../lib/europeCountries'
+import {
+  ADZUNA_UNSUPPORTED_COUNTRIES,
+  DEFAULT_TARGET_COUNTRIES,
+  EUROPE_COUNTRY_OPTIONS,
+  countryLabelFromCode,
+} from '../lib/europeCountries'
 import './ProfilePage.css'
 
 function normalizeProfile(payload) {
@@ -174,6 +179,16 @@ export default function ProfilePage() {
             <span className="selected-country empty">No countries selected yet</span>
           )}
         </div>
+        {form.target_countries.some((code) => ADZUNA_UNSUPPORTED_COUNTRIES.includes(code)) && (
+          <p className="panel-warning">
+            ⚠️ Adzuna does not cover{' '}
+            {form.target_countries
+              .filter((code) => ADZUNA_UNSUPPORTED_COUNTRIES.includes(code))
+              .map((code) => countryLabelFromCode(code))
+              .join(', ')}
+            . Results there will only come from Greenhouse, Lever, and Remotive.
+          </p>
+        )}
       </section>
 
       <div className="profile-actions">
