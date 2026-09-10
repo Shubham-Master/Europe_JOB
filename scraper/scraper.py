@@ -6,6 +6,7 @@ Run this to scrape all sources at once.
 import json
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -66,37 +67,42 @@ def run_all_scrapers(profile_path: str = str(DEFAULT_PROFILE_PATH), output_path:
     keywords = build_search_keywords(profile, max_keywords=6)
     target_countries = normalize_country_codes(profile.get("target_countries", []), DEFAULT_TARGET_COUNTRIES)
 
-    # ── Source 1: Curated ATS boards ──────────────────────────────
-    print("\n📦 SOURCE 1: Curated ATS Boards")
-    try:
-        ats_jobs = scrape_company_sources_for_profile(profile)
-        print(f"✅ ATS boards: {append_jobs('ats', ats_jobs)} new unique jobs")
-    except Exception as e:
-        print(f"⚠️  Curated ATS boards failed: {e}")
+    # Each source hits a distinct set of hosts with its own internal
+    # rate-limiting (RSS/Adzuna already sleep between their own requests), so
+    # running all 4 sources concurrently is safe and collapses their wall-clock
+    # time from "sum of all sources" to "slowest source".
+    source_fns = {
+        "ats": lambda: scrape_company_sources_for_profile(profile),
+        "remotive": lambda: fetch_remotive_jobs(profile, keywords, target_countries),
+        "rss": lambda: scrape_rss_for_profile(profile),
+        "adzuna": lambda: scrape_for_profile(profile),
+    }
+    source_labels = {
+        "ats": "SOURCE 1: Curated ATS Boards",
+        "remotive": "SOURCE 2: Remotive",
+        "rss": "SOURCE 3: RSS Feeds (Indeed)",
+        "adzuna": "SOURCE 4: Adzuna API",
+    }
 
-    # ── Source 2: Remotive ────────────────────────────────────────
-    print("\n📦 SOURCE 2: Remotive")
-    try:
-        remotive_jobs = fetch_remotive_jobs(profile, keywords, target_countries)
-        print(f"✅ Remotive: {append_jobs('remotive', remotive_jobs)} new unique jobs")
-    except Exception as e:
-        print(f"⚠️  Remotive failed: {e}")
+    def run_source(name):
+        try:
+            return name, source_fns[name](), None
+        except Exception as e:  # noqa: BLE001 - surfaced per-source below
+            return name, None, e
 
-    # ── Source 3: RSS Feeds ───────────────────────────────────────
-    print("\n📦 SOURCE 3: RSS Feeds (Indeed)")
-    try:
-        rss_jobs = scrape_rss_for_profile(profile)
-        print(f"✅ RSS: {append_jobs('rss', rss_jobs)} new unique jobs")
-    except Exception as e:
-        print(f"⚠️  RSS failed: {e}")
+    print("\n📦 Scraping all sources in parallel...")
+    with ThreadPoolExecutor(max_workers=len(source_fns)) as pool:
+        results = {name: (jobs, err) for name, jobs, err in pool.map(run_source, source_fns)}
 
-    # ── Source 4: Adzuna API ──────────────────────────────────────
-    print("\n📦 SOURCE 4: Adzuna API")
-    try:
-        adzuna_jobs = scrape_for_profile(profile)
-        print(f"✅ Adzuna: {append_jobs('adzuna', adzuna_jobs)} new unique jobs")
-    except Exception as e:
-        print(f"⚠️  Adzuna failed: {e}")
+    # Merge in a fixed priority order so dedup results stay deterministic
+    # regardless of which source happens to finish first.
+    for name in ("ats", "remotive", "rss", "adzuna"):
+        print(f"\n📦 {source_labels[name]}")
+        jobs, err = results[name]
+        if err is not None:
+            print(f"⚠️  {source_labels[name]} failed: {err}")
+            continue
+        print(f"✅ {name}: {append_jobs(name, jobs)} new unique jobs")
 
     # ── Save ──────────────────────────────────────────────────────
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
