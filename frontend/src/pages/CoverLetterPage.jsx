@@ -334,7 +334,7 @@ export default function CoverLetterPage({ job, onJobChange }) {
 
         {activeJob && !generated && (
           <button className="btn-primary-lg" onClick={() => generateDraft()} disabled={loading}>
-            {loading && loadingAction === 'draft' ? '⏳ Building draft...' : '✍️ Generate Cover Letter'}
+            {loading && loadingAction === 'draft' ? '⏳ Building draft...' : '✍️ Quick Draft (no AI)'}
           </button>
         )}
 
@@ -342,7 +342,7 @@ export default function CoverLetterPage({ job, onJobChange }) {
           <div className="action-row">
             <span className={`generation-pill ${generationMode}`}>{generationModeLabel(generationMode)}</span>
             <button className="btn-ghost-sm" onClick={() => setShowAISettings(true)} disabled={loading}>
-              {loading && loadingAction === 'ai' ? '⏳ Regenerating...' : '✨ Regenerate with AI'}
+              {loading && loadingAction === 'ai' ? '⏳ Generating...' : '✨ Generate with AI (Gemini)'}
             </button>
             <button className="btn-ghost-sm" onClick={copy}>
               {copied ? '✅ Copied!' : '📋 Copy'}
