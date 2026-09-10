@@ -5,6 +5,7 @@ Curated employer ATS board loader and scraper.
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from scraper.greenhouse import fetch_greenhouse_jobs
@@ -53,7 +54,23 @@ def select_company_sources(profile: dict, sources: list[dict] | None = None) -> 
     return [item[2] for item in ranked]
 
 
-def scrape_company_sources_for_profile(profile: dict, manifest_path: str | Path = MANIFEST_PATH) -> list[dict]:
+def _fetch_source_jobs(source: dict, keywords: list[str], target_countries: list[str]) -> tuple[dict, list[dict] | None, Exception | None]:
+    adapter = source.get("adapter")
+    try:
+        if adapter == "greenhouse":
+            return source, fetch_greenhouse_jobs(source, keywords, target_countries), None
+        if adapter == "lever":
+            return source, fetch_lever_jobs(source, keywords, target_countries), None
+        return source, None, None
+    except Exception as exc:  # noqa: BLE001 - surfaced per-source, one bad board shouldn't fail the run
+        return source, None, exc
+
+
+def scrape_company_sources_for_profile(
+    profile: dict,
+    manifest_path: str | Path = MANIFEST_PATH,
+    max_workers: int = 8,
+) -> list[dict]:
     keywords = build_search_keywords(profile)
     target_countries = normalize_country_codes(profile.get("target_countries", []), DEFAULT_TARGET_COUNTRIES)
     sources = select_company_sources(profile, load_company_sources(manifest_path))
@@ -61,29 +78,32 @@ def scrape_company_sources_for_profile(profile: dict, manifest_path: str | Path 
     all_jobs = []
     seen_ids = set()
 
-    for source in sources:
+    # Each company board is an independent host with no shared rate limit, so
+    # fetching them concurrently is safe and turns ~10 sequential requests
+    # (~450ms each) into one round-trip's worth of wall-clock time.
+    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(sources) or 1))) as pool:
+        results = list(pool.map(lambda source: _fetch_source_jobs(source, keywords, target_countries), sources))
+
+    for source, jobs, exc in results:
         adapter = source.get("adapter")
         company = source.get("company", "Unknown")
-        try:
-            if adapter == "greenhouse":
-                jobs = fetch_greenhouse_jobs(source, keywords, target_countries)
-            elif adapter == "lever":
-                jobs = fetch_lever_jobs(source, keywords, target_countries)
-            else:
-                print(f"  ⚠️  Skipping unsupported adapter for {company}: {adapter}")
-                continue
 
-            new_count = 0
-            for job in jobs:
-                if job["id"] in seen_ids:
-                    continue
-                seen_ids.add(job["id"])
-                all_jobs.append(job)
-                new_count += 1
-
-            print(f"  ✅ {company}: {new_count} matching jobs")
-        except Exception as exc:
+        if exc is not None:
             print(f"  ⚠️  {company} ({adapter}) failed: {exc}")
+            continue
+        if jobs is None:
+            print(f"  ⚠️  Skipping unsupported adapter for {company}: {adapter}")
+            continue
+
+        new_count = 0
+        for job in jobs:
+            if job["id"] in seen_ids:
+                continue
+            seen_ids.add(job["id"])
+            all_jobs.append(job)
+            new_count += 1
+
+        print(f"  ✅ {company}: {new_count} matching jobs")
 
     print(f"\n🎯 Total unique ATS jobs: {len(all_jobs)}")
     return all_jobs
