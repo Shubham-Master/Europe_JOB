@@ -36,15 +36,8 @@ COUNTRY_ALIASES = {
 }
 
 REMOTE_LOCATION_KEYWORDS = (
-    "remote",
-    "anywhere",
-    "worldwide",
-    "global",
     "europe",
     "emea",
-    "home based",
-    "home-based",
-    "work from home",
 )
 
 

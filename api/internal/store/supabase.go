@@ -443,18 +443,16 @@ func (s *SupabaseStore) SyncJobsAndMatches(userID, cvVersionID string, rawJobs [
 		return err
 	}
 
-	if len(matchedJobs) == 0 {
-		return nil
-	}
-
 	now := time.Now().UTC().Format(time.RFC3339)
 	payloads := make([]jobMatchUpsertPayload, 0, len(matchedJobs))
+	matchedJobIDs := make([]string, 0, len(matchedJobs))
 	for _, job := range matchedJobs {
 		jobID, ok := identities[normalizedExternalKey(job)]
 		if !ok {
 			continue
 		}
 
+		matchedJobIDs = append(matchedJobIDs, jobID)
 		payloads = append(payloads, jobMatchUpsertPayload{
 			UserID:         userID,
 			JobID:          jobID,
@@ -466,14 +464,38 @@ func (s *SupabaseStore) SyncJobsAndMatches(userID, cvVersionID string, rawJobs [
 		})
 	}
 
-	if len(payloads) == 0 {
-		return nil
+	if len(payloads) > 0 {
+		query := url.Values{}
+		query.Set("on_conflict", "job_id,cv_version_id")
+
+		if err := s.requestJSON(http.MethodPost, "job_matches", query, payloads, "resolution=merge-duplicates,return=minimal", nil); err != nil {
+			return err
+		}
 	}
 
-	query := url.Values{}
-	query.Set("on_conflict", "job_id,cv_version_id")
+	// Prune matches this run no longer returned (e.g. a job dropped out after
+	// the user narrowed target_countries, or it expired/delisted) so stale
+	// results don't linger indefinitely - upserts above only ever add/update,
+	// they never remove. Explicitly saved jobs are never auto-pruned.
+	return s.pruneStaleMatches(userID, cvVersionID, matchedJobIDs)
+}
 
-	return s.requestJSON(http.MethodPost, "job_matches", query, payloads, "resolution=merge-duplicates,return=minimal", nil)
+// pruneStaleMatches deletes job_matches for this user/cv_version_id that are
+// not in keepJobIDs and not saved. An empty keepJobIDs deletes all non-saved
+// matches for the version, mirroring a pipeline run that found zero matches.
+func (s *SupabaseStore) pruneStaleMatches(userID, cvVersionID string, keepJobIDs []string) error {
+	query := url.Values{}
+	if strings.TrimSpace(userID) != "" {
+		query.Set("user_id", "eq."+userID)
+	}
+	query.Set("cv_version_id", "eq."+cvVersionID)
+	query.Set("is_saved", "is.false")
+
+	if len(keepJobIDs) > 0 {
+		query.Set("job_id", "not.in.("+strings.Join(keepJobIDs, ",")+")")
+	}
+
+	return s.requestJSON(http.MethodDelete, "job_matches", query, nil, "return=minimal", nil)
 }
 
 func (s *SupabaseStore) SaveCoverLetter(userID string, job models.Job, data map[string]interface{}) error {

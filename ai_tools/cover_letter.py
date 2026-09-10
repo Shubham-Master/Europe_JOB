@@ -53,6 +53,18 @@ STOPWORDS = {
     "management", "more", "must", "needs", "our", "partner", "platform", "product", "projects",
     "provide", "relevant", "requirements", "role", "scale", "senior", "skills", "strong", "success",
     "support", "team", "their", "this", "through", "using", "with", "work", "working", "you", "your",
+    "able", "across", "all", "any", "apply", "around", "based", "been", "being", "both", "can",
+    "combine", "come", "committed", "does", "each", "either", "employer", "employment", "ensure",
+    "equal", "even", "every", "fleet", "focus", "focused", "further", "gender", "give", "good",
+    "great", "grow", "growing", "growth", "has", "how", "however", "identity", "including",
+    "inclusive", "involve", "involves", "its", "itself", "just", "keep", "large", "level", "like",
+    "make", "makes", "many", "may", "might", "most", "much", "new", "not", "now", "only", "opportunity",
+    "orientation", "other", "out", "over", "part", "people", "provides", "race", "regardless", "regular",
+    "requires", "responsibilities", "responsible", "right", "same", "set", "should", "some", "sourcing",
+    "still", "such", "take", "teams", "than", "that", "them", "themselves", "then", "there", "these",
+    "they", "those", "time", "together", "typically", "under", "understand", "unique", "use", "used",
+    "value", "values", "variety", "very", "want", "well", "what", "when", "where", "which", "who",
+    "will", "within", "without", "would",
 }
 
 
@@ -180,7 +192,7 @@ def generate_cover_letter_draft(job: dict, profile: dict, tailoring: dict | None
     paragraphs = [
         f"Dear Hiring Team,\n\nI am excited to be considered for the {title} role at {company}.{years_sentence} I have built my work around {role_phrase}, and this opportunity stands out because it lines up closely with the kind of problems I have been solving and the direction I want to keep growing in.",
         f"What makes this role a strong fit is the overlap between your needs and my background in {skill_phrase}. Based on the job description, I would focus this application on examples where I improved delivery quality, handled cross-functional ownership, and turned complex requirements into reliable outcomes that teams could trust.",
-        f"I would use this draft to keep the letter concise, specific, and honest, with clear evidence from my actual work instead of generic claims. I am open to opportunities aligned with {location}, and I would welcome the chance to discuss how my experience could support {company}'s goals.\n\nBest regards,\n{name}",
+        f"I am open to opportunities aligned with {location}, and I would welcome the chance to discuss how my experience could support {company}'s goals.\n\nBest regards,\n{name}",
     ]
 
     return "\n\n".join(paragraphs)

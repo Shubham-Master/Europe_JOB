@@ -21,6 +21,10 @@ export const EUROPE_COUNTRY_OPTIONS = [
 
 export const DEFAULT_TARGET_COUNTRIES = ['nl', 'de', 'be', 'ch']
 
+// Adzuna's API does not cover these countries at all — jobs there only
+// come from Greenhouse/Lever/Remotive sources.
+export const ADZUNA_UNSUPPORTED_COUNTRIES = ['dk', 'se', 'no', 'fi']
+
 export function countryLabelFromCode(code) {
   return EUROPE_COUNTRY_OPTIONS.find((item) => item.code === code)?.label || code.toUpperCase()
 }
